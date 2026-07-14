@@ -54,6 +54,11 @@ export function renderLibrary() {
     const grid = document.getElementById('cardGridUI');
     if (!grid) return;
     const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    const stats = document.getElementById('libraryStatsUI');
+    if (stats) {
+        const loreCount = appState.cards.reduce((total, card) => total + Object.keys(card.lorebook || {}).length, 0);
+        stats.innerHTML = `<div><strong>${appState.cards.length}</strong><span>剧本卡</span></div><div><strong>${appState.sessions.length}</strong><span>存档</span></div><div><strong>${loreCount}</strong><span>图鉴条目</span></div>`;
+    }
     grid.innerHTML =
         `<div class="script-card action-card" onclick="openCardEditor()"><div class="icon">➕</div><div class="name" style="color:var(--color-primary);">新建剧本卡</div><div class="desc">构筑新世界</div></div>
 <div class="script-card action-card" onclick="openSillyTavernImportModal()"><div class="icon">📥</div><div class="name" style="color:var(--color-primary);">导入酒馆角色卡</div><div class="desc">PNG / JSON / 粘贴内容</div></div>
@@ -760,25 +765,28 @@ export function importSillyTavernFromFile() {
     
     const reader = new FileReader();
     reader.onload = (e) => {
-        const card = file.type === 'application/json' || /\.json$/i.test(file.name)
-            ? parseSillyTavernCardFromJSON(new TextDecoder().decode(new Uint8Array(e.target.result)))
-            : parseSillyTavernCardFromPNG(e.target.result);
-        if (!card) {
-            showToast('❌ 无法解析该文件，请确认是有效的 SillyTavern PNG/JSON 角色卡', 'error', 5000);
-            return;
+        try {
+            const buffer = e.target.result;
+            const isJsonName = file.type === 'application/json' || /\.json$/i.test(file.name);
+            const card = isJsonName
+                ? parseSillyTavernCardFromJSON(new TextDecoder().decode(new Uint8Array(buffer)))
+                : parseSillyTavernCardFromPNG(buffer) || parseSillyTavernCardFromJSON(new TextDecoder().decode(new Uint8Array(buffer)));
+            if (!card) {
+                showToast('❌ 无法解析该文件。请确认它是 PNG 内嵌角色卡、旧版 JSON 或有效的角色卡文本。', 'error', 6000);
+                return;
+            }
+            if (card.avatarDataUrl) card.avatar = card.avatarDataUrl;
+            appState.cards.unshift(card);
+            saveLocalData();
+            renderLibrary();
+            closeModal('sillyTavernImportModal');
+            showToast('✅ 成功导入角色卡: ' + card.name, 'success');
+        } catch (error) {
+            console.error('导入角色卡失败:', error);
+            showToast('❌ 导入失败：文件内容不完整或格式不受支持', 'error', 6000);
         }
-        
-        // 如果解析出头像 URL，替换默认头像
-        if (card.avatarDataUrl) {
-            card.avatar = card.avatarDataUrl;
-        }
-        
-        appState.cards.unshift(card);
-        saveLocalData();
-        renderLibrary();
-        closeModal('sillyTavernImportModal');
-        showToast('✅ 成功导入角色卡: ' + card.name, 'success');
     };
+    reader.onerror = () => showToast('❌ 文件读取失败，请重新选择文件', 'error');
     reader.readAsArrayBuffer(file);
 }
 

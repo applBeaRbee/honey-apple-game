@@ -382,11 +382,15 @@ function escapeRegExp(value) {
 // ================= SillyTavern 卡片规范化层 =================
 // 解析入口只负责识别载体，后续统一走这里，避免 PNG/JSON 两套字段逻辑逐渐分叉。
 export function parseSillyTavernCharacterCard(input, options = {}) {
-    const raw = readCardPayload(input);
+    let raw;
+    try { raw = readCardPayload(input); } catch (error) {
+        console.warn('角色卡载荷读取失败:', error);
+        return null;
+    }
     if (!raw) return null;
 
     const normalized = normalizeSillyTavernCard(raw);
-    if (!normalized?.data?.name && !normalized?.data?.description && !normalized?.data?.first_mes) return null;
+    if (!normalized?.hasCardSignal) return null;
 
     const data = normalized.data;
     const book = normalized.characterBook;
@@ -399,7 +403,7 @@ export function parseSillyTavernCharacterCard(input, options = {}) {
         description: compactText(data.description || data.personality || '一张 SillyTavern 角色卡').substring(0, 180),
         worldSetting: firstValue(data.extensions?.world, data.scenario, findBookText(book, /world|世界观|学校|school/i), '奇幻冒险世界'),
         storyBackground: firstValue(data.scenario, data.description, findBookText(book, /world|世界观|学校|school/i), '一段新的冒险...'),
-        defaultCharName: firstValue(data.your_name, data.player_name, data.user_name, ''),
+        defaultCharName: firstValue(data.your_name, data.player_name, data.user_name, data.userName, ''),
         defaultCharInfo: cleanImportedText(data.personality || data.description || ''),
         systemPrompt: [
             data.system_prompt,
@@ -440,15 +444,20 @@ export function parseSillyTavernCharacterCard(input, options = {}) {
 }
 
 export function normalizeSillyTavernCard(input) {
-    const root = isObject(input) ? input : {};
-    const data = isObject(root.data) ? root.data : root;
-    const nested = isObject(data.data) ? data.data : data;
-    const merged = { ...data, ...nested };
-    const book = normalizeRawCharacterBook(merged.character_book || merged.characterBook || merged.extensions?.world_info || root.character_book);
+    const root = parseMaybeJsonObject(input);
+    const embedded = firstObject(root.data, root.chara, root.ccv3, root.ccv2, root.ccv1);
+    const data = embedded || root;
+    const nested = parseMaybeJsonObject(data.data);
+    const rawMerged = { ...data, ...(nested || {}) };
+    const hasCardSignal = looksLikeCharacterCard(root) || looksLikeCharacterCard(rawMerged);
+    const merged = normalizeLegacyFields(rawMerged);
+    const extensionBook = isObject(merged.extensions) ? (merged.extensions.world_info || merged.extensions.lorebook) : null;
+    const book = normalizeRawCharacterBook(merged.character_book || merged.characterBook || extensionBook || root.character_book || root.lorebook);
     return {
         data: merged,
         characterBook: book,
-        spec: root.spec || merged.spec || (root.data ? 'chara_card_v2' : 'unknown'),
+        hasCardSignal,
+        spec: root.spec || merged.spec || (embedded ? 'chara_card_v2' : 'chara_card_v1'),
         specVersion: root.spec_version || merged.spec_version || root.specVersion || '',
         creator: root.creator || merged.creator || ''
     };
@@ -457,12 +466,21 @@ export function normalizeSillyTavernCard(input) {
 function readCardPayload(input) {
     if (isObject(input)) return input;
     if (typeof input !== 'string') {
-        if (input instanceof ArrayBuffer || ArrayBuffer.isView(input)) return readPngCardPayload(input);
+        if (typeof ArrayBuffer !== 'undefined' && (input instanceof ArrayBuffer || ArrayBuffer.isView(input))) return readPngCardPayload(input);
         return null;
     }
-    const text = input.trim();
+    const text = input.replace(/^\uFEFF/, '').trim();
     if (!text) return null;
     try { return JSON.parse(text); } catch (_) {}
+    const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fenced) {
+        try { return JSON.parse(fenced[1]); } catch (_) {}
+    }
+    const objectStart = text.indexOf('{');
+    const objectEnd = text.lastIndexOf('}');
+    if (objectStart >= 0 && objectEnd > objectStart) {
+        try { return JSON.parse(text.slice(objectStart, objectEnd + 1)); } catch (_) {}
+    }
     try {
         const decoded = decodeBase64Json(text);
         if (decoded) return decoded;
@@ -471,12 +489,17 @@ function readCardPayload(input) {
 }
 
 function readPngCardPayload(input) {
-    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input.buffer || input);
+    const bytes = input instanceof Uint8Array
+        ? input
+        : ArrayBuffer.isView(input)
+            ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+            : new Uint8Array(input);
     if (!isPng(bytes)) return null;
     const chunks = extractPngTextChunks(bytes);
     for (const keyword of ['ccv3', 'ccv2', 'chara', 'ccv1']) {
         if (chunks[keyword]) {
-            const decoded = decodeBase64Json(chunks[keyword]);
+            let decoded = null;
+            try { decoded = decodeMaybeEncodedJson(chunks[keyword]); } catch (_) {}
             if (decoded) return decoded;
         }
     }
@@ -503,8 +526,10 @@ function extractPngTextChunks(bytes) {
                 const compressionFlag = payload[cursor++];
                 cursor++;
                 const languageEnd = payload.indexOf(0, cursor);
+                if (languageEnd < 0) { offset = end + 4; continue; }
                 cursor = languageEnd + 1;
                 const translatedEnd = payload.indexOf(0, cursor);
+                if (translatedEnd < 0) { offset = end + 4; continue; }
                 cursor = translatedEnd + 1;
                 if (compressionFlag === 0) chunks[ascii(payload, 0, keywordEnd)] = new TextDecoder().decode(payload.slice(cursor)).trim();
             }
@@ -516,24 +541,32 @@ function extractPngTextChunks(bytes) {
 }
 
 function normalizeRawCharacterBook(book) {
+    book = parseMaybeJsonObject(book);
     if (!isObject(book)) return { entries: [] };
-    const entries = Array.isArray(book.entries) ? book.entries : Array.isArray(book.keys) ? book.keys : [];
+    const entries = Array.isArray(book.entries)
+        ? book.entries
+        : isObject(book.entries)
+            ? Object.values(book.entries)
+            : Array.isArray(book.keys)
+                ? book.keys
+                : [];
     return {
         ...cloneJson(book),
         entries: entries.map((entry, index) => ({
-            ...cloneJson(entry),
-            comment: entry.comment || entry.name || entry.title || entry.keys?.[0] || `条目${index + 1}`,
-            keys: Array.isArray(entry.keys) ? entry.keys : [],
-            content: typeof entry.content === 'string' ? entry.content : String(entry.content || ''),
-            enabled: entry.enabled !== false,
-            insertion_order: Number(entry.insertion_order ?? entry.order ?? index)
+            ...(isObject(entry) ? cloneJson(entry) : {}),
+            comment: isObject(entry) ? (entry.comment || entry.name || entry.title || firstKey(entry.keys) || `条目${index + 1}`) : `条目${index + 1}`,
+            keys: normalizeKeys(isObject(entry) ? entry.keys : []),
+            content: isObject(entry) ? (typeof entry.content === 'string' ? entry.content : String(entry.content || entry.text || '')) : String(entry || ''),
+            enabled: !isObject(entry) || entry.enabled !== false,
+            insertion_order: Number(isObject(entry) ? (entry.insertion_order ?? entry.insertionOrder ?? entry.order ?? index) : index)
         }))
     };
 }
 
 function decodeBase64Json(value) {
-    const normalized = String(value || '').replace(/^data:[^,]+,/, '').replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    let normalized = String(value || '').replace(/^data:[^,]+,/, '').replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
     if (!normalized) return null;
+    while (normalized.length % 4) normalized += '=';
     const binary = typeof atob === 'function'
         ? atob(normalized)
         : typeof Buffer !== 'undefined'
@@ -545,6 +578,13 @@ function decodeBase64Json(value) {
     try { return JSON.parse(text); } catch (_) {
         try { return JSON.parse(decodeURIComponent(escape(binary))); } catch (__) { return null; }
     }
+}
+
+function decodeMaybeEncodedJson(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch (_) {}
+    return decodeBase64Json(text);
 }
 
 function pickOpening(data) {
@@ -575,3 +615,40 @@ function isPng(bytes) { return bytes?.length >= 8 && [137,80,78,71,13,10,26,10].
 function readUint32(bytes, offset) { return ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3]; }
 function ascii(bytes, start, length) { return String.fromCharCode(...bytes.slice(start, start + length)); }
 function generateBrowserId(prefix) { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
+
+function parseMaybeJsonObject(value) {
+    if (isObject(value)) return value;
+    if (typeof value !== 'string') return {};
+    try {
+        const parsed = JSON.parse(value.trim());
+        return isObject(parsed) ? parsed : {};
+    } catch (_) { return {}; }
+}
+
+function firstObject(...values) { return values.map(parseMaybeJsonObject).find(value => Object.keys(value).length) || null; }
+function normalizeKeys(keys) { return Array.isArray(keys) ? keys.map(String).filter(Boolean) : typeof keys === 'string' ? keys.split(/[,，\n]/).map(item => item.trim()).filter(Boolean) : []; }
+function firstKey(keys) { return normalizeKeys(keys)[0] || ''; }
+
+function normalizeLegacyFields(data) {
+    const normalized = { ...data };
+    normalized.name = firstValue(data.name, data.char_name, data.character_name, data.title, '未命名角色');
+    normalized.description = firstValue(data.description, data.char_persona, data.persona, data.profile, '');
+    normalized.personality = firstValue(data.personality, data.persona, data.char_personality, '');
+    normalized.scenario = firstValue(data.scenario, data.world, data.world_setting, '');
+    normalized.first_mes = firstValue(data.first_mes, data.greeting, data.first_message, data.initial_message, '');
+    normalized.system_prompt = firstValue(data.system_prompt, data.context, data.system, '');
+    normalized.mes_example = firstValue(data.mes_example, data.example_dialogue, data.example_messages, '');
+    normalized.tags = Array.isArray(data.tags) ? data.tags : typeof data.tags === 'string' ? data.tags.split(/[,，]/) : [];
+    return normalized;
+}
+
+function looksLikeCharacterCard(value) {
+    if (!isObject(value)) return false;
+    const directKeys = ['name', 'char_name', 'character_name', 'description', 'char_persona', 'personality', 'first_mes', 'first_message', 'scenario'];
+    if (directKeys.some(key => typeof value[key] === 'string' && value[key].trim())) return true;
+    if (value.spec || value.spec_version || value.character_book || value.characterBook) return true;
+    return ['data', 'chara', 'ccv3', 'ccv2', 'ccv1'].some(key => {
+        const parsed = parseMaybeJsonObject(value[key]);
+        return Object.keys(parsed).length > 0 && looksLikeCharacterCard(parsed);
+    });
+}

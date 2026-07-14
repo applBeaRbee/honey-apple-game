@@ -127,11 +127,26 @@
             </div>
             <div class="nav-buttons">
                 <button class="nav-btn primary" onclick="switchMainView('library')">📚 剧本卡片库</button>
+                <button class="nav-btn" onclick="openCurrentSessionSetup()">＋ 新建冒险存档</button>
             </div>
-            <div class="session-list" id="sessionListUI"></div>
+            <div class="sidebar-context" id="sidebarContextUI">
+                <div class="sidebar-section-label">当前冒险</div>
+                <div class="sidebar-context-empty">从卡片库进入一个世界，<br>这里会显示当前进度。</div>
+            </div>
+            <div class="session-zone">
+                <div class="session-zone-header">
+                    <div class="sidebar-section-label">冒险存档</div>
+                    <span class="session-count" id="sessionCountUI">0</span>
+                </div>
+                <label class="session-search">
+                    <span>⌕</span>
+                    <input id="sessionSearchInput" type="search" placeholder="搜索存档" oninput="renderSidebarSessions(this.value)">
+                </label>
+                <div class="session-list" id="sessionListUI"></div>
+            </div>
             <div class="sidebar-footer">
-                <button class="foot-btn" onclick="openExportModal()">📦 封存备份</button>
-                <button class="foot-btn" onclick="openApiModal()">⚙️ API</button>
+                <button class="foot-btn" onclick="openExportModal()">📦 <span>封存备份</span></button>
+                <button class="foot-btn" onclick="openApiModal()">⚙️ <span>API 设置</span></button>
             </div>
         </aside>
 
@@ -139,7 +154,14 @@
             <!-- 卡片库 -->
             <div id="libraryView">
                 <div class="lib-header">
-                    <div class="lib-title">📚 卡片库</div>
+                    <div class="lib-header-row">
+                        <div>
+                            <div class="lib-kicker">WORLD BUILDER / 01</div>
+                            <div class="lib-title">📚 剧本卡片库</div>
+                            <div class="lib-subtitle">管理角色卡、世界书与可持续推进的冒险存档。</div>
+                        </div>
+                        <div class="lib-stats" id="libraryStatsUI"></div>
+                    </div>
                 </div>
                 <div class="search-bar">
                     <span style="color:var(--text-muted); font-size:1.1rem;">🔍</span>

@@ -13,24 +13,71 @@ import { renderActionBar } from './actions.js';
 import { buildMemoryDbFromCard } from './card-importer.js';
 import { ensureLiyuanData, createWorldlineSnapshot, updateMemoryTiers } from './world-state.js';
 
-export function renderSidebarSessions() {
+export function renderSidebarSessions(query = document.getElementById('sessionSearchInput')?.value || '') {
     const list = document.getElementById('sessionListUI');
     if (!list) return;
-    list.innerHTML = '<div class="session-title-bar">📜 冒险存档</div>';
-    appState.sessions.forEach(s => {
+    const normalizedQuery = String(query || '').trim().toLowerCase();
+    const sorted = [...appState.sessions].sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+    const sessions = sorted.filter(s => {
+        if (!normalizedQuery) return true;
+        const card = appState.cards.find(c => c.id === s.cardId);
+        return `${s.name} ${card?.name || ''}`.toLowerCase().includes(normalizedQuery);
+    });
+    const count = document.getElementById('sessionCountUI');
+    if (count) count.textContent = String(appState.sessions.length);
+    list.innerHTML = '';
+    if (!sessions.length) {
+        list.innerHTML = `<div class="session-empty">${normalizedQuery ? '没有匹配的存档' : '还没有冒险存档'}</div>`;
+        renderSidebarContext();
+        return;
+    }
+    sessions.forEach(s => {
         const card = appState.cards.find(c => c.id === s.cardId);
         const isActive = s.id === currentSessionId;
         const d = document.createElement('div');
         d.className = `session-item${isActive ? ' active' : ''}`;
         d.onclick = () => resumeSession(s.id);
-        const time = s.lastUpdated ? new Date(s.lastUpdated).toLocaleString('zh-CN') : '';
+        const time = s.lastUpdated ? formatSessionTime(s.lastUpdated) : '';
+        const progress = Array.isArray(s.history) ? s.history.length : 0;
         d.innerHTML = `
-            <div class="session-item-name">${escapeHtml(s.name)}</div>
-            <div class="session-item-card">${escapeHtml(card?.name || '未知卡片')}</div>
-            <div class="session-item-time">${escapeHtml(time)}</div>
+            <div class="session-item-main">
+                <div class="session-item-name">${escapeHtml(s.name)}</div>
+                <div class="session-item-card">${escapeHtml(card?.name || '未知卡片')}</div>
+            </div>
+            <div class="session-item-meta"><span>${progress ? `第 ${progress} 回合` : '尚未开始'}</span><time>${escapeHtml(time)}</time></div>
             <button class="session-del-btn" onclick="event.stopPropagation(); deleteSession('${s.id}')">✕</button>`;
         list.appendChild(d);
     });
+    renderSidebarContext();
+}
+
+function formatSessionTime(timestamp) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+}
+
+function renderSidebarContext() {
+    const root = document.getElementById('sidebarContextUI');
+    if (!root) return;
+    const session = appState.sessions.find(item => item.id === currentSessionId);
+    const card = session ? appState.cards.find(item => item.id === session.cardId) : null;
+    if (!session || !card) {
+        root.innerHTML = '<div class="sidebar-section-label">当前冒险</div><div class="sidebar-context-empty">从卡片库进入一个世界，<br>这里会显示当前进度。</div>';
+        return;
+    }
+    root.innerHTML = `<div class="sidebar-section-label">当前冒险</div>
+        <div class="sidebar-current-card">
+            <div class="sidebar-current-mark">✦</div>
+            <div class="sidebar-current-copy"><strong>${escapeHtml(session.name)}</strong><span>${escapeHtml(card.name)}</span></div>
+            <button class="sidebar-current-open" onclick="resumeSession('${session.id}')" title="回到当前冒险">↗</button>
+        </div>`;
+}
+
+export function openCurrentSessionSetup() {
+    const card = currentSessionId ? appState.cards.find(item => item.id === appState.sessions.find(s => s.id === currentSessionId)?.cardId) : appState.cards[0];
+    if (card && typeof window.openSessionSetup === 'function') window.openSessionSetup(card.id);
+    else showToast('请先导入或创建一张剧本卡', 'warning');
 }
 
 export function updateUserUI() {
@@ -208,3 +255,4 @@ window.deleteSession = deleteSession;
 window.renderSidebarSessions = renderSidebarSessions;
 window.updateUserUI = updateUserUI;
 window.openSessionEditModal = openSessionEditModal;
+window.openCurrentSessionSetup = openCurrentSessionSetup;
