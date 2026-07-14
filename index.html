@@ -182,24 +182,30 @@
                         <button class="top-btn" onclick="switchMainView('library')">🏠 主页</button>
                         <button class="top-btn red-dot" id="btnMailbox" onclick="openMailboxModal()">✉️ 信箱</button>
                         <button class="top-btn primary-tool" onclick="openCurrentFrontendModal()">🌸 前端</button>
-                        <button class="top-btn primary-tool" onclick="openMemoryModal()">🧠 记忆</button>
-                        <button class="top-btn primary-tool" onclick="openLorebookModal()">📇 图鉴</button>
+                        <button class="top-btn primary-tool mobile-collapse-tool" onclick="openMemoryModal()">🧠 记忆</button>
+                        <button class="top-btn primary-tool mobile-collapse-tool" onclick="openLorebookModal()">📇 图鉴</button>
                         <div class="top-more-wrap">
                             <button class="top-btn top-more-toggle" onclick="toggleGameToolsMenu(event)" aria-expanded="false">⋯ 更多</button>
                             <div class="top-tools-menu" id="topToolsMenu">
                                 <button onclick="openGalleryModal()">🎴 画廊</button>
                                 <button onclick="openGameSettingsModal()">⚙️ 设置</button>
+                                <button class="mobile-menu-tool" onclick="openMemoryModal()">🧠 记忆</button>
+                                <button class="mobile-menu-tool" onclick="openLorebookModal()">📇 图鉴</button>
                                 <button onclick="openWorldlineModal()">🌿 世界线</button>
                                 <button onclick="openDirectorModal()">🎭 决策</button>
                                 <button onclick="openCodexModal()">📚 知识库</button>
                                 <button onclick="openUploadsModal()">🧩 素材</button>
                                 <button onclick="openThemeModal()">🎨 主题</button>
+                                <button class="mobile-menu-tool" onclick="triggerImportDiary()">📥 导入</button>
+                                <button class="mobile-menu-tool" onclick="exportDiary()">📤 导出</button>
+                                <button class="mobile-menu-tool" onclick="openSessionEditModal()">📝 编辑</button>
+                                <button class="mobile-menu-tool" onclick="forceSyncPanels()">🔄 强刷</button>
                             </div>
                         </div>
-                        <button class="top-btn import-diary" onclick="triggerImportDiary()">📥 导入</button>
-                        <button class="top-btn" style="color: #f5f0e6; background: rgba(155, 89, 182, 0.2); border-color: rgba(155, 89, 182, 0.5);" onclick="exportDiary()">📤 导出</button>
-                        <button class="top-btn edit-session-card" onclick="openSessionEditModal()">📝 编辑</button>
-                        <button class="top-btn accent" onclick="forceSyncPanels()">🔄 强刷</button>
+                        <button class="top-btn import-diary mobile-collapse-tool" onclick="triggerImportDiary()">📥 导入</button>
+                        <button class="top-btn mobile-collapse-tool" style="color: #f5f0e6; background: rgba(155, 89, 182, 0.2); border-color: rgba(155, 89, 182, 0.5);" onclick="exportDiary()">📤 导出</button>
+                        <button class="top-btn edit-session-card mobile-collapse-tool" onclick="openSessionEditModal()">📝 编辑</button>
+                        <button class="top-btn accent mobile-collapse-tool" onclick="forceSyncPanels()">🔄 强刷</button>
                     </div>
                 </div>
                 <input type="file" id="diaryImportInput" accept=".txt,.md,.log" style="display:none;" onchange="handleDiaryImport(event)">

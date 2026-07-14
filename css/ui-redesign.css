@@ -766,6 +766,10 @@ select {
     color: var(--ui-accent);
 }
 
+.mobile-menu-tool {
+    display: none;
+}
+
 /* Game content */
 .game-main-area {
     flex: 1;
@@ -1684,6 +1688,87 @@ select.form-input {
     .frontend-preview-head strong {
         white-space: normal;
         overflow-wrap: anywhere;
+    }
+
+    .mobile-collapse-tool {
+        display: none !important;
+    }
+
+    .mobile-menu-tool {
+        display: block;
+    }
+
+    .game-top-bar .actions {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: stretch;
+        overflow: visible;
+        gap: 6px;
+    }
+
+    .game-top-bar .actions > .top-btn,
+    .game-top-bar .actions > .top-more-wrap {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .game-top-bar .actions > .top-btn,
+    .top-more-toggle {
+        justify-content: center;
+        min-width: 0;
+        width: 100%;
+        padding-left: 6px;
+        padding-right: 6px;
+        font-size: 0.72rem;
+    }
+
+    .top-tools-menu {
+        top: calc(96px + env(safe-area-inset-top));
+        right: 10px;
+        left: 10px;
+        width: auto;
+        max-height: min(62dvh, 460px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .top-tools-menu button {
+        min-height: 40px;
+        font-size: 0.82rem;
+    }
+
+    #mobileGameNav {
+        flex: 0 0 auto;
+        display: flex !important;
+        min-height: 46px;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .game-main-area.show-panel {
+        display: flex !important;
+        flex-direction: column;
+    }
+
+    .game-main-area.show-panel .game-sidebar {
+        display: flex !important;
+        flex: 0 0 auto;
+        max-height: none;
+        min-height: 48px;
+        width: 100%;
+    }
+
+    .game-main-area.show-panel .panel-content-area {
+        display: flex !important;
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .game-main-area.show-chat .game-sidebar,
+    .game-main-area.show-chat .panel-content-area,
+    .game-main-area.show-panel .chat-area {
+        display: none !important;
     }
 }
 
