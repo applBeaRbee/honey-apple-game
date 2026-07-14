@@ -1,0 +1,381 @@
+/* ===== Visual polish layer: warm porcelain + cinnabar ===== */
+:root {
+    --bg-main: #f7f4ef;
+    --bg-panel: #fffdfa;
+    --bg-card: #fbf4ea;
+    --bg-sidebar: #241815;
+    --bg-sidebar-hover: #33231f;
+    --bg-chat-user: #fbede6;
+    --bg-chat-sys: rgba(113, 93, 76, 0.08);
+    --text-main: #332a25;
+    --text-sub: #6f6258;
+    --text-muted: #9b9087;
+    --text-light: #efe6dd;
+    --color-primary: #b9482d;
+    --color-primary-hover: #9f3922;
+    --color-info: #4f7f9f;
+    --border-color: rgba(119, 94, 76, 0.18);
+    --border-color-strong: rgba(119, 94, 76, 0.34);
+    --shadow-sm: 0 1px 2px rgba(41, 31, 25, 0.05), 0 5px 16px rgba(41, 31, 25, 0.06);
+    --shadow-md: 0 2px 8px rgba(41, 31, 25, 0.07), 0 14px 32px rgba(41, 31, 25, 0.08);
+    --shadow-lg: 0 8px 24px rgba(41, 31, 25, 0.10), 0 28px 64px rgba(41, 31, 25, 0.14);
+}
+
+body {
+    background:
+        radial-gradient(1100px 580px at 48% -12%, #fffaf4 0%, rgba(255, 250, 244, 0) 58%),
+        radial-gradient(820px 460px at 100% 100%, rgba(185, 72, 45, 0.08), transparent 55%),
+        radial-gradient(720px 420px at 0% 85%, rgba(79, 127, 159, 0.06), transparent 50%),
+        var(--bg-main);
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.42;
+    background-image:
+        linear-gradient(rgba(55, 42, 32, 0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(55, 42, 32, 0.014) 1px, transparent 1px);
+    background-size: 28px 28px, 28px 28px;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.85), rgba(0,0,0,0.18));
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb {
+    background: rgba(111, 98, 88, 0.28);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 8px;
+}
+
+.global-sidebar,
+.mobile-header,
+.game-top-bar,
+.chat-input-area,
+#mobileGameNav {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0)),
+        var(--bg-sidebar);
+}
+
+.global-sidebar {
+    border-right-color: rgba(255,255,255,0.08);
+    box-shadow: 8px 0 30px rgba(36, 24, 21, 0.16);
+}
+
+.sidebar-header,
+.user-profile-bar,
+.nav-buttons,
+.sidebar-footer {
+    border-color: rgba(255,255,255,0.08);
+}
+
+.logo-icon,
+.mobile-header-title {
+    filter: drop-shadow(0 4px 12px rgba(185, 72, 45, 0.22));
+}
+
+.nav-btn,
+.foot-btn,
+.top-btn,
+.quick-btn,
+.action-chip {
+    border-radius: 8px;
+}
+
+.nav-btn,
+.foot-btn,
+.top-btn {
+    background: rgba(255,255,255,0.055);
+    border-color: rgba(255,255,255,0.10);
+}
+
+.nav-btn:hover,
+.foot-btn:hover,
+.top-btn:hover {
+    background: rgba(255,255,255,0.11);
+}
+
+.nav-btn.primary,
+.top-btn.edit-session-card,
+.btn-chat#btnSend,
+.action-btn {
+    background: linear-gradient(180deg, #c65335, var(--color-primary));
+    border-color: rgba(255,255,255,0.10);
+    box-shadow: 0 8px 22px rgba(185, 72, 45, 0.22);
+}
+
+.top-btn.import-diary,
+.top-btn.accent {
+    background: rgba(185, 72, 45, 0.18);
+    border-color: rgba(185, 72, 45, 0.42);
+}
+
+#libraryView,
+#gameView,
+.chat-area {
+    background: transparent;
+}
+
+#libraryView {
+    padding: 28px clamp(18px, 3vw, 42px);
+}
+
+.lib-header,
+.search-bar,
+.card-grid {
+    width: min(1180px, 100%);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.lib-title {
+    color: var(--text-main);
+    letter-spacing: 0;
+}
+
+.search-bar,
+.modal-box,
+.script-card,
+.panel-card,
+.memory-person-card,
+.memory-location-card,
+.memory-quest-card,
+.fact-card,
+.status-card {
+    background: rgba(255, 253, 250, 0.86);
+    border-color: rgba(119, 94, 76, 0.20);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(12px);
+}
+
+.search-bar:focus-within,
+.form-input:focus,
+.form-textarea:focus,
+.chat-input:focus {
+    border-color: rgba(185, 72, 45, 0.72);
+    box-shadow: 0 0 0 3px rgba(185, 72, 45, 0.13), var(--shadow-sm);
+}
+
+.script-card {
+    justify-content: flex-start;
+    min-height: 244px;
+    height: auto;
+    padding: 22px 18px 18px;
+    border-radius: 12px;
+}
+
+.script-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(185, 72, 45, 0.08), transparent 42%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.script-card:hover::before { opacity: 1; }
+.script-card:hover { transform: translateY(-3px); }
+
+.script-card .avatar {
+    background: linear-gradient(145deg, #fff8ef, #eadfd2);
+    border-color: rgba(185, 72, 45, 0.24);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 24px rgba(41,31,25,0.10);
+}
+
+.game-main-area {
+    padding: 12px;
+    gap: 12px;
+}
+
+.chat-area,
+.game-sidebar,
+.panel-content-area {
+    border: 1px solid rgba(119, 94, 76, 0.18);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.chat-area {
+    background: rgba(255, 253, 250, 0.66);
+    backdrop-filter: blur(10px);
+}
+
+.chat-history {
+    max-width: 920px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 22px 22px 18px;
+    gap: 14px;
+}
+
+.chat-row {
+    width: 100%;
+}
+
+.chat-avatar {
+    background: linear-gradient(145deg, #fff8ef, #eadfd2);
+    border: 1px solid rgba(119, 94, 76, 0.20);
+    box-shadow: var(--shadow-sm);
+}
+
+.chat-message {
+    max-width: min(760px, 92%);
+    border-radius: 12px;
+    border-color: rgba(119, 94, 76, 0.18);
+    background: rgba(255, 253, 250, 0.92);
+    box-shadow: 0 1px 2px rgba(41,31,25,0.04), 0 10px 26px rgba(41,31,25,0.06);
+}
+
+.msg-user {
+    background: linear-gradient(165deg, #fff8f3, #fae6dd);
+    color: #7e321d;
+    border-color: rgba(185, 72, 45, 0.28);
+}
+
+.msg-narrator {
+    max-width: min(780px, 100%);
+    background: rgba(255, 253, 250, 0.42);
+    border-left: 3px solid rgba(185, 72, 45, 0.46);
+    border-radius: 0 10px 10px 0;
+    padding: 8px 12px 8px 16px;
+    color: #524840;
+}
+
+.quick-action-bar,
+.action-bar {
+    max-width: 920px;
+    margin: 0 auto;
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+.quick-btn,
+.action-chip {
+    background: rgba(255, 253, 250, 0.74);
+    border-color: rgba(119, 94, 76, 0.20);
+    color: var(--text-sub);
+}
+
+.quick-btn:hover,
+.action-chip:hover {
+    background: rgba(185, 72, 45, 0.12);
+    color: var(--color-primary);
+    border-color: rgba(185, 72, 45, 0.38);
+}
+
+.chat-input-area {
+    padding: 12px;
+    box-shadow: 0 -12px 32px rgba(36, 24, 21, 0.12);
+}
+
+.chat-input {
+    height: 44px;
+    border-radius: 10px;
+    border-color: rgba(39, 22, 18, 0.32);
+}
+
+.btn-voice,
+.btn-dice,
+.btn-chat {
+    height: 44px;
+    border-radius: 10px;
+}
+
+.game-sidebar {
+    width: 108px;
+    background: rgba(255, 253, 250, 0.58);
+    backdrop-filter: blur(10px);
+    padding: 10px 6px;
+}
+
+.panel-tab-btn {
+    border-radius: 10px;
+}
+
+.panel-tab-btn.active {
+    background: linear-gradient(180deg, #fffdfa, #fff4eb);
+    color: var(--color-primary);
+    border-color: rgba(185, 72, 45, 0.24);
+    box-shadow: 0 8px 20px rgba(41,31,25,0.08);
+}
+
+.panel-content-area {
+    background: rgba(255, 253, 250, 0.72);
+    backdrop-filter: blur(10px);
+    padding: 18px;
+}
+
+.panel-title {
+    color: #2f251f;
+}
+
+.panel-divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(185,72,45,0.34), rgba(119,94,76,0.12), transparent);
+}
+
+.panel-card:hover,
+.memory-person-card:hover,
+.memory-location-card:hover,
+.memory-quest-card:hover,
+.fact-card:hover {
+    border-color: rgba(185, 72, 45, 0.32);
+    box-shadow: var(--shadow-md);
+}
+
+.modal-overlay {
+    background: rgba(26, 17, 14, 0.54);
+    backdrop-filter: blur(10px);
+}
+
+.modal-box {
+    border-radius: 14px;
+    border-width: 1px;
+}
+
+.form-input,
+.form-textarea {
+    background: rgba(255, 255, 255, 0.78);
+    border-radius: 9px;
+}
+
+.canvas-wrapper {
+    border-radius: 12px;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(185,72,45,0.08), transparent 36%),
+        radial-gradient(circle at 80% 80%, rgba(79,127,159,0.08), transparent 38%),
+        #fffdf8;
+}
+
+.canvas-toolbar {
+    background: rgba(255, 253, 250, 0.86);
+    border-color: rgba(119, 94, 76, 0.22);
+    backdrop-filter: blur(10px);
+}
+
+@media (max-width: 850px) {
+    .game-main-area { padding: 0; gap: 0; }
+    .chat-area,
+    .game-sidebar,
+    .panel-content-area {
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+    }
+    .chat-history { padding: 14px; }
+    .chat-message { max-width: 94%; }
+    .quick-action-bar,
+    .action-bar { padding-left: 10px; padding-right: 10px; }
+    .chat-input-area { padding: 8px 10px; }
+}
+
+@media (max-width: 480px) {
+    .script-card { min-height: 178px; }
+    .chat-history { gap: 8px; }
+    .chat-message { border-radius: 10px; }
+}

@@ -31,6 +31,9 @@ pnpm-debug.log*
 .reasonix/
 reasonix.toml
 
+# Local reference projects
+Liyuan-master/
+
 # Temporary generated repair files
 *.fixed
 
