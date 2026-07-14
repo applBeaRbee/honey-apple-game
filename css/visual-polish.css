@@ -379,3 +379,155 @@ body::before {
     .chat-history { gap: 8px; }
     .chat-message { border-radius: 10px; }
 }
+
+/* ===== Fusion surfaces ===== */
+.fusion-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.fusion-toolbar .form-input { flex: 1; min-width: 0; }
+.fusion-toolbar .action-btn { width: auto; min-width: 92px; }
+.uploads-toolbar .form-input { min-width: 0; }
+
+.fusion-modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 62vh;
+    overflow-y: auto;
+    padding: 2px;
+}
+
+.fusion-state-preview {
+    padding: 14px 16px;
+    border: 1px solid rgba(185, 72, 45, 0.20);
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(255,248,241,0.92), rgba(255,253,250,0.82));
+}
+
+.fusion-state-label {
+    color: var(--color-primary);
+    font-size: 0.74rem;
+    font-weight: 900;
+    margin-bottom: 7px;
+}
+
+.fusion-state-preview pre {
+    white-space: pre-wrap;
+    margin: 0;
+    color: var(--text-sub);
+    font: 0.78rem/1.7 var(--font-mono);
+}
+
+.fusion-line-list { display: flex; flex-direction: column; gap: 12px; }
+.fusion-line {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255,253,250,0.62);
+}
+
+.fusion-line.active { border-color: rgba(185,72,45,0.35); box-shadow: var(--shadow-sm); }
+.fusion-line-header,
+.fusion-save-item,
+.codex-library-header,
+.upload-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.fusion-line-header {
+    padding: 12px 14px;
+    background: rgba(185,72,45,0.06);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fusion-line-header strong,
+.codex-library-header strong { display: block; color: var(--text-main); }
+.fusion-line-header span,
+.codex-library-header span,
+.fusion-line-header em { display: block; color: var(--text-muted); font-size: 0.7rem; font-style: normal; margin-top: 3px; }
+.fusion-line-header > em { margin: 0; }
+
+.fusion-save-item {
+    align-items: flex-start;
+    padding: 12px 14px;
+    border-bottom: 1px dashed var(--border-color);
+}
+.fusion-save-item:last-child { border-bottom: 0; }
+.fusion-save-item.current { background: rgba(185,72,45,0.075); }
+.fusion-save-main { min-width: 0; flex: 1; }
+.fusion-save-main strong { color: var(--text-main); font-size: 0.86rem; }
+.fusion-save-main span,
+.fusion-save-main p { display: block; color: var(--text-muted); font-size: 0.7rem; line-height: 1.5; margin: 4px 0 0; }
+.fusion-save-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.fusion-save-actions button,
+.codex-add button,
+.director-freeform button {
+    border: 1px solid rgba(185,72,45,0.26);
+    background: rgba(185,72,45,0.08);
+    color: var(--color-primary);
+    border-radius: 7px;
+    padding: 6px 9px;
+    cursor: pointer;
+    font-size: 0.72rem;
+}
+.fusion-save-actions button:hover,
+.codex-add button:hover,
+.director-freeform button:hover { background: var(--color-primary); color: #fff; }
+.fusion-empty { padding: 14px; color: var(--text-muted); font-size: 0.78rem; text-align: center; }
+.fusion-empty.large { padding: 34px 18px; }
+
+.director-card-ui {
+    border: 1px solid rgba(185,72,45,0.28);
+    border-radius: 14px;
+    padding: 17px;
+    background: linear-gradient(145deg, rgba(255,248,241,0.96), rgba(255,253,250,0.88));
+    box-shadow: var(--shadow-sm);
+}
+.director-card-ui.resolved { border-color: var(--border-color); background: rgba(255,253,250,0.70); }
+.director-card-kicker { color: var(--color-primary); font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; }
+.director-card-ui h4 { margin: 5px 0 7px; color: var(--text-main); font-family: var(--font-serif); font-size: 1.04rem; }
+.director-card-ui p { color: var(--text-sub); line-height: 1.65; font-size: 0.82rem; margin: 0 0 12px; }
+.director-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.director-option { display: flex; gap: 8px; align-items: flex-start; text-align: left; padding: 11px; border: 1px solid rgba(119,94,76,0.20); border-radius: 9px; background: rgba(255,255,255,0.64); color: var(--text-sub); cursor: pointer; line-height: 1.5; }
+.director-option span { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(185,72,45,0.12); color: var(--color-primary); font: 0.72rem var(--font-mono); flex: 0 0 auto; }
+.director-option:hover:not(:disabled) { border-color: rgba(185,72,45,0.45); background: rgba(185,72,45,0.08); color: var(--text-main); }
+.director-option:disabled { cursor: default; opacity: 0.62; }
+.director-freeform { display: flex; gap: 8px; margin-top: 9px; }
+.director-freeform .form-input { flex: 1; min-width: 0; }
+.director-answer { padding: 9px 11px; border-radius: 8px; color: var(--text-sub); background: rgba(185,72,45,0.08); font-size: 0.78rem; }
+.director-card-time { margin-top: 11px; color: var(--text-muted); font-size: 0.68rem; }
+
+.codex-library { border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: rgba(255,253,250,0.65); }
+.codex-library-header { padding: 12px 14px; background: rgba(79,127,159,0.07); border-bottom: 1px solid var(--border-color); }
+.codex-library-header > em { color: var(--text-muted); font-size: 0.72rem; font-style: normal; }
+.codex-entry { padding: 11px 14px; border-bottom: 1px dashed var(--border-color); }
+.codex-entry strong { color: var(--text-main); font-size: 0.82rem; }
+.codex-entry p { color: var(--text-sub); font-size: 0.76rem; line-height: 1.6; margin: 4px 0; white-space: pre-wrap; }
+.codex-entry small { color: var(--text-muted); font-size: 0.68rem; }
+.codex-add { display: grid; grid-template-columns: 0.7fr 1.5fr auto; gap: 7px; padding: 10px; }
+
+.upload-entry { align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(255,253,250,0.70); }
+.upload-entry strong { color: var(--text-main); font-size: 0.82rem; }
+.upload-entry span { margin-left: 8px; color: var(--color-info); font-size: 0.68rem; }
+.upload-entry p { margin: 4px 0 0; color: var(--text-sub); font-size: 0.74rem; word-break: break-all; }
+.upload-entry small { color: var(--text-muted); font-size: 0.68rem; white-space: nowrap; }
+
+@media (max-width: 640px) {
+    .fusion-toolbar,
+    .uploads-toolbar,
+    .director-freeform { align-items: stretch; flex-direction: column; }
+    .fusion-toolbar .action-btn { width: 100%; }
+    .director-options { grid-template-columns: 1fr; }
+    .codex-add { grid-template-columns: 1fr; }
+    .fusion-save-item { flex-direction: column; }
+    .fusion-save-actions { width: 100%; }
+    .fusion-save-actions button { flex: 1; }
+    .upload-entry { flex-direction: column; }
+}

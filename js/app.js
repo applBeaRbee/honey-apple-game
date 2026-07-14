@@ -18,6 +18,8 @@ import { setupVoiceEvents } from './voice.js';
 import { updateAmbientEnvironment } from './ambient.js';
 import { openExportModal, toggleAllExportCards, executeExport, importData, exportDiary, triggerImportDiary, handleDiaryImport, openApiModal, toggleApiConfigBlocks, saveApiSettings, testStandardApi, testDifyApi, openGameSettingsModal, saveGameSettings, openLorebookModal, saveLorebook } from './export-import.js';
 import { updateWorldTimeUI, animateTimePass, addWorldTime, formatTimeDisplay, formatTimeShort } from './time.js';
+import './world-state.js';
+import './fusion-ui.js';
 
 // ===== 初始化 =====
 window.onload = async function() {

@@ -5,6 +5,7 @@ import { showToast, showConfirm } from './ui.js';
 import { saveLocalData } from './storage.js';
 import { renderSidebarSessions } from './sessions.js';
 import { renderStructuredText } from './structured-renderer.js';
+import { syncPanelOrder } from './world-state.js';
 
 // ===== 面板数据操作 =====
 export function deleteCustomPanel(name) {
@@ -271,7 +272,8 @@ export function renderGamePanelsUI() {
     const icons = { '人物': '👤', '角色': '👤', '核心': '✨', '状态': '📊', '包裹': '🎒', '行囊': '🎒', '背包': '🎒', '物品': '🎒', '装备': '⚔️', '技能': '⚡', '任务': '📋', '日记': '📜', '地图': '🗺️', '区域': '🗺️', '关系': '🕸️', '社交': '🕸️', '羁绊': '❤️' };
     function getIcon(name) { for (const [k, v] of Object.entries(icons)) if (name.includes(k)) return v; return '📌'; }
 
-    for (const tabName in gameConfig.panels) {
+    const panelNames = syncPanelOrder(gameConfig);
+    for (const tabName of panelNames) {
         const isCustom = (gameConfig.customPanels || []).includes(tabName);
         const btn = document.createElement('div');
         btn.className = "panel-tab-btn";

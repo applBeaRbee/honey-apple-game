@@ -11,6 +11,7 @@ import { rebuildChatHistoryUI } from './chat.js';
 import { checkMailRedDot } from './mailbox.js';
 import { renderActionBar } from './actions.js';
 import { buildMemoryDbFromCard } from './card-importer.js';
+import { ensureLiyuanData, createWorldlineSnapshot, updateMemoryTiers } from './world-state.js';
 
 export function renderSidebarSessions() {
     const list = document.getElementById('sessionListUI');
@@ -122,6 +123,8 @@ export function startSessionFromSetup() {
         backgroundMemory: '',
         memoryDb: buildMemoryDbFromCard(card)
     };
+    ensureLiyuanData(session);
+    createWorldlineSnapshot('初始节点', session, { note: '冒险开始', auto: false });
     
     appState.sessions.unshift(session);
     saveLocalData();
@@ -142,6 +145,8 @@ export function resumeSession(sessionId) {
     if (!gameConfig.worldTime) gameConfig.worldTime = { day: 1, hour: 8, minute: 0 };
     if (!gameConfig.backgroundMemory) gameConfig.backgroundMemory = '';
     if (!gameConfig.memoryDb) gameConfig.memoryDb = { characters: {}, locations: {}, events: [], facts: [], quests: [] };
+    ensureLiyuanData(gameConfig);
+    updateMemoryTiers(gameConfig);
     document.getElementById('gameTitle').innerText = gameConfig.name;
     switchMainView('game');
     renderSidebarSessions();

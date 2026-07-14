@@ -161,6 +161,10 @@
                         <button class="top-btn" onclick="openGameSettingsModal()">⚙️ 设置</button>
                         <button class="top-btn" onclick="openLorebookModal()">📇 图鉴</button>
                         <button class="top-btn" onclick="openMemoryModal()">🧠 记忆</button>
+                        <button class="top-btn" onclick="openWorldlineModal()">🌿 世界线</button>
+                        <button class="top-btn" onclick="openDirectorModal()">🎭 决策</button>
+                        <button class="top-btn" onclick="openCodexModal()">📚 知识库</button>
+                        <button class="top-btn" onclick="openUploadsModal()">🧩 素材</button>
                         <button class="top-btn" onclick="openThemeModal()" style="color:#f5f0e6;background:rgba(155,89,182,0.2);border-color:rgba(155,89,182,0.5);">🎨 主题</button>
                         <button class="top-btn import-diary" onclick="triggerImportDiary()">📥 导入</button>
                         <button class="top-btn" style="color: #f5f0e6; background: rgba(155, 89, 182, 0.2); border-color: rgba(155, 89, 182, 0.5);" onclick="exportDiary()">📤 导出</button>
@@ -390,6 +394,41 @@
             <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:12px;">AI 自动维护的世界知识库，包含人物、地点、事件和任务</p>
             <div id="memoryContent"></div>
             <button class="action-btn btn-outline" onclick="closeModal('memoryModal')" style="margin-top:12px;">关闭</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="worldlineModal">
+        <div class="modal-box wide">
+            <h3 style="margin-bottom:12px;font-size:1.1rem;">🌿 世界线</h3>
+            <div class="fusion-toolbar"><input id="worldlineSaveName" class="form-input" placeholder="存档名，例如：雨夜分歧点"><button class="action-btn" onclick="createManualWorldlineSave()">钉存档</button></div>
+            <div id="worldlineContent" class="fusion-modal-content"></div>
+            <button class="action-btn btn-outline" onclick="closeModal('worldlineModal')" style="margin-top:12px;">关闭</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="directorModal">
+        <div class="modal-box wide">
+            <h3 style="margin-bottom:12px;font-size:1.1rem;">🎭 决策卡</h3>
+            <div id="directorContent" class="fusion-modal-content"></div>
+            <button class="action-btn btn-outline" onclick="closeModal('directorModal')" style="margin-top:12px;">关闭</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="codexModal">
+        <div class="modal-box wide">
+            <h3 style="margin-bottom:12px;font-size:1.1rem;">📚 知识库</h3>
+            <div class="fusion-toolbar"><input id="codexLibraryName" class="form-input" placeholder="新知识库名，例如：奇物图鉴"><button class="action-btn" onclick="createCodexLibraryFromUI()">新建库</button></div>
+            <div id="codexContent" class="fusion-modal-content"></div>
+            <button class="action-btn btn-outline" onclick="closeModal('codexModal')" style="margin-top:12px;">关闭</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="uploadsModal">
+        <div class="modal-box wide">
+            <h3 style="margin-bottom:12px;font-size:1.1rem;">🧩 素材库</h3>
+            <div class="fusion-toolbar uploads-toolbar"><input id="uploadName" class="form-input" placeholder="素材名，例如：学院地图.png"><input id="uploadUrl" class="form-input" placeholder="链接或本地说明，可选"><button class="action-btn" onclick="registerUploadFromUI()">登记</button></div>
+            <div id="uploadsContent" class="fusion-modal-content"></div>
+            <button class="action-btn btn-outline" onclick="closeModal('uploadsModal')" style="margin-top:12px;">关闭</button>
         </div>
     </div>
 

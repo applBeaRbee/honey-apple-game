@@ -12,6 +12,7 @@ import { formatMsgContent } from './chat.js';
 import { checkMailRedDot } from './mailbox.js';
 import { preloadTavernImage } from './image-gen.js';
 import { buildMemoryContext, updateMemoryFromAIResponse, extractMemoryFromMessage } from './memory.js';
+import { ensureLiyuanData, afterTurnBookkeeping, buildLiyuanContext, createDirectorCard, shouldSuggestDirectorCard, getOpenDirectorCards } from './world-state.js';
 
 function normalizeChatApiUrl(url) {
     if (!url) return '';
@@ -55,6 +56,7 @@ export async function sendToAI(mailData = null) {
     if (isDify && !appState.settings.difyApiKey) return showToast("未配置 Dify 密钥", "error");
     if (!isDify && !appState.settings.apiKey) return showToast("未配置 API 密钥", "error");
     if (!gameConfig) return showToast("游戏配置缺失", "error");
+    ensureLiyuanData(gameConfig);
 
     const input = document.getElementById('chatInput');
     const history = document.getElementById('chatHistoryUI');
@@ -105,10 +107,12 @@ export async function sendToAI(mailData = null) {
 
         // ===== 构建记忆上下文 =====
         const memoryContext = buildMemoryContext();
-        const memoryStr = memoryContext ? `\n\n【世界观数据库】\n${memoryContext}` : '';
+        const liyuanContext = buildLiyuanContext(gameConfig);
+        const memoryStr = [memoryContext ? `【世界观数据库】\n${memoryContext}` : '', liyuanContext].filter(Boolean).join('\n\n');
+        const memoryBlock = memoryStr ? `\n\n${memoryStr}` : '';
 
         if (isDify) {
-            const query = `【法则】世界观:${gameConfig.worldSetting} 背景:${gameConfig.storyBackground} 主角:${gameConfig.charName}(${gameConfig.charInfo}) 守则:${gameConfig.systemPromptText}${loreStr}${memoryStr}\n${isMail?'[信箱模式]仅回信，用new_mails返回。':'【面板】:'+JSON.stringify(gameConfig.panels)+'\n【行动】:'+userText+'\n【输出】末尾必须包含======DATA====== 后接纯JSON(含pass_time,panels,memory_db,new_mails等)。'}`;
+            const query = `【法则】世界观:${gameConfig.worldSetting} 背景:${gameConfig.storyBackground} 主角:${gameConfig.charName}(${gameConfig.charInfo}) 守则:${gameConfig.systemPromptText}${loreStr}${memoryBlock}\n${isMail?'[信箱模式]仅回信，用new_mails返回。':'【面板】:'+JSON.stringify(gameConfig.panels)+'\n【行动】:'+userText+'\n【输出】末尾必须包含======DATA====== 后接纯JSON(含pass_time,panels,memory_db,new_mails等)。'}`;
             let difyBody = {
                 inputs: {},
                 query: query,
@@ -132,8 +136,8 @@ export async function sendToAI(mailData = null) {
             answer = data.answer || "";
         } else {
             // ===== 标准 OpenAI 格式 =====
-            const base = `【核心指令】硬核DM。回复末尾必须包含======DATA====== 后接纯JSON。\n世界观:${gameConfig.worldSetting}\n背景:${gameConfig.storyBackground}\n主角:${gameConfig.charName}(${gameConfig.charInfo})\n守则:${gameConfig.systemPromptText}${loreStr}${memoryStr}`;
-            const format = `【最高指令】1.更新面板状态 2.末尾======DATA====== 后接纯JSON 3.时空平滑 4.支持new_mails,new_gallery,cg_cutin,pass_time,ambient,memory_db\n【当前面板】:${JSON.stringify(gameConfig.panels)}`;
+            const base = `【核心指令】硬核DM。回复末尾必须包含======DATA====== 后接纯JSON。\n世界观:${gameConfig.worldSetting}\n背景:${gameConfig.storyBackground}\n主角:${gameConfig.charName}(${gameConfig.charInfo})\n守则:${gameConfig.systemPromptText}${loreStr}${memoryBlock}`;
+            const format = `【最高指令】1.更新面板状态 2.末尾======DATA====== 后接纯JSON 3.时空平滑 4.支持new_mails,new_gallery,cg_cutin,pass_time,ambient,memory_db 5.若用户请求方向或场景存在重大分歧，可输出 director_card:{title,body,options,freeform}\n【当前面板】:${JSON.stringify(gameConfig.panels)}\n【融合世界状态】:${liyuanContext}`;
 
             let msgs = [{ role: "system", content: base }];
 
@@ -246,6 +250,21 @@ export async function sendToAI(mailData = null) {
                 });
             }
 
+            if (parsed.director_card?.title && Array.isArray(parsed.director_card.options)) {
+                const card = createDirectorCard(parsed.director_card, gameConfig);
+                window.renderDirectorUI?.();
+                showToast(`🎭 ${card.title}：请打开决策卡选择`, 'info', 6000);
+            } else if (!isMail && shouldSuggestDirectorCard(userText)) {
+                const card = createDirectorCard({
+                    title: '下一步怎么走',
+                    body: '你把决定权交给了剧情。先选一个方向，系统会把选择留痕并带回下一轮。',
+                    options: acts.length ? acts.slice(0, 4) : ['谨慎观察局势', '主动交涉试探', '推进当前目标', '暂时后撤整理线索'],
+                    freeform: true
+                }, gameConfig);
+                window.renderDirectorUI?.();
+                showToast(`🎭 已生成决策卡「${card.title}」`, 'info', 6000);
+            }
+
             // ===== 更新记忆数据库 =====
             updateMemoryFromAIResponse(parsed);
             // 从AI回复中提取记忆
@@ -282,6 +301,7 @@ export async function sendToAI(mailData = null) {
             worldTime: getWorldTimeSnapshot()
         });
         gameConfig.lastUpdated = Date.now();
+        afterTurnBookkeeping(gameConfig, { reason: isMail ? '信件' : '剧情回合' });
         saveLocalData();
         renderSidebarSessions();
     } catch (e) {

@@ -5,6 +5,7 @@ import { escapeHtml } from './constants.js';
 import { showToast } from './ui.js';
 import { saveLocalData } from './storage.js';
 import { renderStructuredText, renderCharacterCard, renderFactCard, renderInfoCard } from './structured-renderer.js';
+import { ensureLiyuanData, updateMemoryTiers } from './world-state.js';
 
 // ===== 记忆数据库结构 =====
 // 动态结构：卡片有什么就创建什么，不硬编码固定字段
@@ -23,6 +24,7 @@ const DEFAULT_MEMORY_DB = {
 // 初始化或获取记忆数据库
 export function getMemoryDb() {
     if (!gameConfig) return null;
+    ensureLiyuanData(gameConfig);
     if (!gameConfig.memoryDb) {
         gameConfig.memoryDb = JSON.parse(JSON.stringify(DEFAULT_MEMORY_DB));
     }
@@ -100,6 +102,12 @@ export function buildMemoryContext() {
         }
     }
 
+    updateMemoryTiers(gameConfig);
+    const tiers = gameConfig.memoryTiers;
+    if (tiers?.summary?.entries?.length) {
+        const summary = tiers.summary.entries.slice(-8).map(entry => entry.content || entry.info?.description || entry.info?.title || '').filter(Boolean).join('\n');
+        if (summary) parts.push('【长期摘要】\n' + summary.substring(0, 1400));
+    }
     return parts.join('\n\n');
 }
 
@@ -178,6 +186,8 @@ export function updateMemoryFromAIResponse(parsed) {
     }
 
     db.lastUpdated = Date.now();
+    ensureLiyuanData(gameConfig);
+    updateMemoryTiers(gameConfig);
     saveLocalData();
 }
 
