@@ -447,6 +447,24 @@ select {
     color: var(--ui-ink);
 }
 
+.setup-card-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.setup-card-preview > div:last-child {
+    min-width: 0;
+}
+
+.setup-card-preview strong {
+    display: inline-block;
+    max-width: 100%;
+    color: var(--ui-ink);
+    font: 900 0.95rem/1.3 var(--font-main);
+}
+
 .session-del-btn {
     right: 8px;
     top: 9px;

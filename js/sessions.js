@@ -141,9 +141,12 @@ export function openSessionSetup(cardId) {
     if (!card) return;
     const modal = document.getElementById('sessionSetupModal');
     if (!modal) return;
+    const avatar = card.avatarDataUrl || card.avatar || '📜';
     document.getElementById('setupCardId').value = card.id;
     document.getElementById('setupCardInfo').innerHTML =
         `<strong>${escapeHtml(card.avatar||'📜')} ${escapeHtml(card.name)}</strong><br><span style="color:var(--text-muted);font-size:0.8rem;">${escapeHtml(card.description||'')}</span>`;
+    document.getElementById('setupCardInfo').innerHTML =
+        `<div class="setup-card-preview">${renderAvatarHtml(avatar, '58px')}<div><strong>${escapeHtml(card.name)}</strong><br><span style="color:var(--text-muted);font-size:0.8rem;">${escapeHtml(card.description||'')}</span></div></div>`;
     document.getElementById('setupCharName').value = card.defaultCharName || '';
     document.getElementById('setupCharInfo').value = card.defaultCharInfo || '';
     modal.style.display = 'flex';
