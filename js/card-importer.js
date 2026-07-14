@@ -420,6 +420,7 @@ export function parseSillyTavernCharacterCard(input, options = {}) {
         tags: normalizeTags(data.tags),
         spec: normalized.spec,
         specVersion: normalized.specVersion,
+        frontendAssets: extractFrontendAssets(data),
         extensions: cloneJson(data.extensions || {}),
         rawCardData: cloneJson(raw),
         characterBookData: book,
@@ -464,9 +465,9 @@ export function normalizeSillyTavernCard(input) {
 }
 
 function readCardPayload(input) {
-    if (isObject(input)) return input;
     if (typeof input !== 'string') {
         if (typeof ArrayBuffer !== 'undefined' && (input instanceof ArrayBuffer || ArrayBuffer.isView(input))) return readPngCardPayload(input);
+        if (isObject(input)) return input;
         return null;
     }
     const text = input.replace(/^\uFEFF/, '').trim();
@@ -494,8 +495,7 @@ function readPngCardPayload(input) {
         : ArrayBuffer.isView(input)
             ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
             : new Uint8Array(input);
-    if (!isPng(bytes)) return null;
-    const chunks = extractPngTextChunks(bytes);
+    const chunks = isPng(bytes) ? extractPngTextChunks(bytes) : extractLoosePngTextChunks(bytes);
     for (const keyword of ['ccv3', 'ccv2', 'chara', 'ccv1']) {
         if (chunks[keyword]) {
             let decoded = null;
@@ -503,7 +503,42 @@ function readPngCardPayload(input) {
             if (decoded) return decoded;
         }
     }
+    return decodeLooseCardPayload(bytes);
+}
+
+function decodeLooseCardPayload(bytes) {
+    const rawText = decodeLooseBinaryText(bytes);
+    const markerRe = /(?:tEXt)?(ccv3|ccv2|chara|ccv1)\s+/g;
+    const matches = [...rawText.matchAll(markerRe)];
+    for (const match of matches) {
+        const tail = rawText.slice(match.index + match[0].length);
+        const stop = tail.search(/IEND|tEXt(?:ccv3|ccv2|chara|ccv1)/);
+        const payload = (stop > 0 ? tail.slice(0, stop) : tail).replace(/[^A-Za-z0-9+/=_-]/g, '');
+        if (payload.length < 120) continue;
+        let decoded = null;
+        try { decoded = decodeMaybeEncodedJson(payload); } catch (_) {}
+        if (decoded) return decoded;
+    }
     return null;
+}
+
+function extractLoosePngTextChunks(bytes) {
+    const text = decodeLooseBinaryText(bytes);
+    const chunks = {};
+    for (const keyword of ['ccv3', 'ccv2', 'chara', 'ccv1']) {
+        const marker = `tEXt${keyword}`;
+        const markerIndex = text.indexOf(marker);
+        const keywordIndex = markerIndex >= 0 ? markerIndex + marker.length : text.indexOf(`${keyword} `);
+        if (keywordIndex < 0) continue;
+        const tail = text.slice(keywordIndex).replace(/^\s+/, '');
+        const endMarkers = ['IEND', 'tEXtccv3', 'tEXtccv2', 'tEXtchara', 'tEXtccv1']
+            .map(markerName => tail.indexOf(markerName))
+            .filter(index => index > 0);
+        const payload = tail.slice(0, endMarkers.length ? Math.min(...endMarkers) : tail.length);
+        const match = payload.match(/[A-Za-z0-9+/=_\-\s]{120,}/);
+        if (match) chunks[keyword] = match[0].replace(/\s/g, '');
+    }
+    return chunks;
 }
 
 function extractPngTextChunks(bytes) {
@@ -576,7 +611,17 @@ function decodeBase64Json(value) {
     const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
     const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     try { return JSON.parse(text); } catch (_) {
-        try { return JSON.parse(decodeURIComponent(escape(binary))); } catch (__) { return null; }
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            try { return JSON.parse(text.slice(start, end + 1)); } catch (__) {}
+        }
+        try {
+            const legacyText = decodeURIComponent(escape(binary));
+            const legacyStart = legacyText.indexOf('{');
+            const legacyEnd = legacyText.lastIndexOf('}');
+            return JSON.parse(legacyStart >= 0 && legacyEnd > legacyStart ? legacyText.slice(legacyStart, legacyEnd + 1) : legacyText);
+        } catch (__) { return null; }
     }
 }
 
@@ -585,6 +630,12 @@ function decodeMaybeEncodedJson(value) {
     if (!text) return null;
     try { return JSON.parse(text); } catch (_) {}
     return decodeBase64Json(text);
+}
+
+function decodeLooseBinaryText(bytes) {
+    try { return new TextDecoder('latin1').decode(bytes); } catch (_) {}
+    try { return new TextDecoder('utf-8').decode(bytes); } catch (_) {}
+    return Array.from(bytes, byte => String.fromCharCode(byte)).join('');
 }
 
 function pickOpening(data) {
@@ -610,7 +661,7 @@ function compactText(value) { return cleanImportedText(value).replace(/\s+/g, ' 
 function firstValue(...values) { return values.find(value => value !== undefined && value !== null && String(value).trim()) || ''; }
 function normalizeTags(tags) { return Array.isArray(tags) ? tags.map(tag => String(tag).trim()).filter(Boolean).slice(0, 80) : []; }
 function cloneJson(value) { try { return JSON.parse(JSON.stringify(value)); } catch (_) { return {}; } }
-function isObject(value) { return value && typeof value === 'object' && !Array.isArray(value); }
+function isObject(value) { return Object.prototype.toString.call(value) === '[object Object]'; }
 function isPng(bytes) { return bytes?.length >= 8 && [137,80,78,71,13,10,26,10].every((v, i) => bytes[i] === v); }
 function readUint32(bytes, offset) { return ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3]; }
 function ascii(bytes, start, length) { return String.fromCharCode(...bytes.slice(start, start + length)); }
@@ -651,4 +702,48 @@ function looksLikeCharacterCard(value) {
         const parsed = parseMaybeJsonObject(value[key]);
         return Object.keys(parsed).length > 0 && looksLikeCharacterCard(parsed);
     });
+}
+
+function extractFrontendAssets(data) {
+    const scripts = Array.isArray(data.extensions?.regex_scripts) ? data.extensions.regex_scripts : [];
+    return scripts
+        .map((script, index) => {
+            const source = String(script.replaceString || script.content || '');
+            const html = extractHtmlSnippet(source);
+            const url = extractFrontendUrl(source);
+            if (!html && !url) return null;
+            return {
+                id: script.id || `frontend_${index + 1}`,
+                name: script.scriptName || script.name || `内置前端 ${index + 1}`,
+                disabled: script.disabled === true,
+                markdownOnly: script.markdownOnly === true,
+                sourceUrl: url,
+                html: html ? sanitizeFrontendHtml(html).substring(0, 60000) : '',
+                placement: script.placement || []
+            };
+        })
+        .filter(Boolean)
+        .slice(0, 12);
+}
+
+function extractHtmlSnippet(value) {
+    const text = String(value || '').trim();
+    const fenced = text.match(/```(?:html|text)?\s*([\s\S]*?)\s*```/i);
+    const body = fenced ? fenced[1] : text;
+    if (!/<(?:div|details|style|body|iframe|section|article|span|p|script)\b/i.test(body)) return '';
+    return body.replace(/^<body[^>]*>/i, '').replace(/<\/body>$/i, '').trim();
+}
+
+function extractFrontendUrl(value) {
+    const match = String(value || '').match(/https?:\/\/[^\s"'\\)<>]+/i);
+    return match ? match[0] : '';
+}
+
+function sanitizeFrontendHtml(value) {
+    return String(value || '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        .replace(/javascript:/gi, '')
+        .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+        .trim();
 }

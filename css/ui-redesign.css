@@ -977,6 +977,56 @@ select {
     font-style: italic;
 }
 
+.card-frontend-section {
+    grid-column: 1 / -1;
+}
+
+.frontend-preview-stack {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.frontend-preview-card {
+    overflow: hidden;
+    border: 1px solid var(--ui-line);
+    border-radius: var(--ui-radius-md);
+    background: rgba(255,255,255,0.54);
+}
+
+.frontend-preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 11px;
+    border-bottom: 1px solid var(--ui-line);
+    color: var(--ui-ink-2);
+    font-size: 0.76rem;
+}
+
+.frontend-preview-head strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.frontend-preview-head a {
+    flex-shrink: 0;
+    color: var(--ui-accent);
+    font-size: 0.7rem;
+}
+
+.frontend-preview-frame {
+    display: block;
+    width: 100%;
+    height: 360px;
+    border: 0;
+    background: #fffafd;
+}
+
 .st-import-modal h3 {
     margin-bottom: 10px;
     font-size: 1.22rem;
@@ -1064,6 +1114,14 @@ select {
 
     .card-detail-badges {
         justify-content: center;
+    }
+
+    .card-frontend-section {
+        grid-column: auto;
+    }
+
+    .frontend-preview-frame {
+        height: 300px;
     }
 }
 

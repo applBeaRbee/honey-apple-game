@@ -501,13 +501,13 @@
         <div class="modal-box st-import-modal" style="max-width:760px;">
             <h3>📥 导入 SillyTavern 角色卡</h3>
             <p class="st-import-lead">
-                支持 PNG 内嵌角色数据、V1/V2/V3 JSON、Base64 JSON 和 HTML 备用解析。导入后会自动生成可变面板、图鉴和记忆数据库。
+                支持 PNG 内嵌角色数据、源码 TXT、损坏 PNG 文本、V1/V2/V3 JSON、Base64 JSON 和 HTML 备用解析。导入后会自动生成可变面板、图鉴、记忆数据库和卡内前端预览。
             </p>
             <div class="st-import-grid">
                 <div class="st-import-dropzone">
                     <div class="st-import-icon">🖼️</div>
                     <label>选择角色卡 PNG / JSON 文件</label>
-                    <input type="file" id="stFileInput" accept=".png,.json,application/json" style="display:block;margin:0 auto 12px;">
+                    <input type="file" id="stFileInput" accept=".png,.json,.txt,application/json,text/plain" style="display:block;margin:0 auto 12px;">
                     <button class="action-btn" onclick="importSillyTavernFromFile()" style="width:auto;padding:8px 24px;min-height:40px;margin:0 auto;">🚀 导入角色卡</button>
                 </div>
                 <div class="st-import-paste">

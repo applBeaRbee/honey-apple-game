@@ -49,6 +49,33 @@ function renderAvatarHtml(avatar, size = '60px') {
     return `<div class="avatar" style="width:${size};height:${size};font-size:${size === '60px' ? '1.8rem' : '3.5rem'};border-radius:50%;background:#e6decb;display:flex;align-items:center;justify-content:center;border:2px solid var(--border-color-strong);flex-shrink:0;">${escapeHtml(avatar)}</div>`;
 }
 
+function isPngArrayBuffer(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer || []);
+    return bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value);
+}
+
+function renderFrontendAssetsHtml(assets = []) {
+    if (!Array.isArray(assets) || !assets.length) return '';
+    return `<section class="card-detail-section card-frontend-section"><h4>🌸 内置前端 (${assets.length})</h4>
+        <div class="frontend-preview-stack">
+            ${assets.map(asset => {
+                const title = `${asset.disabled ? '已禁用 · ' : ''}${asset.name || '内置前端'}`;
+                const frame = asset.sourceUrl
+                    ? `<iframe class="frontend-preview-frame" src="${escapeHtml(asset.sourceUrl)}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe>`
+                    : `<iframe class="frontend-preview-frame" srcdoc="${escapeHtml(buildFrontendSrcdoc(asset.html || ''))}" loading="lazy" sandbox=""></iframe>`;
+                return `<article class="frontend-preview-card">
+                    <div class="frontend-preview-head"><strong>${escapeHtml(title)}</strong>${asset.sourceUrl ? `<a href="${escapeHtml(asset.sourceUrl)}" target="_blank" rel="noopener noreferrer">打开源页面</a>` : ''}</div>
+                    ${frame}
+                </article>`;
+            }).join('')}
+        </div>
+    </section>`;
+}
+
+function buildFrontendSrcdoc(html) {
+    return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body>${html || '<div>无可预览内容</div>'}</body></html>`;
+}
+
 // ===== 渲染卡片库 =====
 export function renderLibrary() {
     const grid = document.getElementById('cardGridUI');
@@ -188,7 +215,8 @@ export function showCardDetail(cardId) {
     const metaBadges = [
         card.defaultCharName ? `👤 ${escapeHtml(card.defaultCharName)}` : '',
         card.spec ? `ST ${escapeHtml(card.specVersion || card.spec)}` : '',
-        card.characterBookData?.entries?.length ? `📚 ${card.characterBookData.entries.length} 条角色书` : ''
+        card.characterBookData?.entries?.length ? `📚 ${card.characterBookData.entries.length} 条角色书` : '',
+        card.frontendAssets?.length ? `🌸 ${card.frontendAssets.length} 个内置前端` : ''
     ].filter(Boolean);
 
     document.getElementById('cardDetailContent').innerHTML = `
@@ -206,6 +234,7 @@ export function showCardDetail(cardId) {
         ${hasPanels ? `<section class="card-detail-section"><h4>📊 角色面板</h4>${panelPreviewHtml}</section>` : ''}
         <div class="card-detail-grid">
             <div class="card-detail-column">
+                ${renderFrontendAssetsHtml(card.frontendAssets)}
                 <section class="card-detail-section"><h4>🌍 世界观</h4><div class="panel-card">${escapeHtml(card.worldSetting||'未设定')}</div></section>
                 <section class="card-detail-section"><h4>📖 背景故事</h4><div class="panel-card scroll-card">${escapeHtml(card.storyBackground||'未设定')}</div></section>
                 <section class="card-detail-section"><h4>🎭 角色设定</h4><div class="panel-card">${escapeHtml(card.defaultCharInfo||'未设定')}</div></section>
@@ -737,10 +766,9 @@ export function openSillyTavernImportModal() {
 export function parseSillyTavernCardFromPNG(arrayBuffer) {
     if (!arrayBuffer) return null;
     try {
-        const blob = new Blob([arrayBuffer], { type: 'image/png' });
-        const avatar = URL.createObjectURL(blob);
+        const avatar = isPngArrayBuffer(arrayBuffer) ? URL.createObjectURL(new Blob([arrayBuffer], { type: 'image/png' })) : null;
         const card = parseSillyTavernCharacterCard(arrayBuffer, { avatar });
-        if (!card) URL.revokeObjectURL(avatar);
+        if (!card && avatar) URL.revokeObjectURL(avatar);
         return card;
     } catch (error) {
         console.error('解析 SillyTavern 角色卡失败:', error);
@@ -775,7 +803,7 @@ export function importSillyTavernFromFile() {
                 showToast('❌ 无法解析该文件。请确认它是 PNG 内嵌角色卡、旧版 JSON 或有效的角色卡文本。', 'error', 6000);
                 return;
             }
-            if (card.avatarDataUrl) card.avatar = card.avatarDataUrl;
+            if (card.avatarDataUrl && isPngArrayBuffer(buffer)) card.avatar = card.avatarDataUrl;
             appState.cards.unshift(card);
             saveLocalData();
             renderLibrary();
