@@ -460,11 +460,6 @@ html.theme-cyber .form-textarea {
         overflow: hidden;
     }
 
-    #gameView {
-        display: flex;
-        flex-direction: column;
-    }
-
     .game-top-bar,
     #mobileGameNav,
     .action-bar,
@@ -522,6 +517,8 @@ html.theme-cyber .form-textarea {
         height: 100dvh !important;
         max-height: 100dvh !important;
         overflow: hidden;
+        display: flex !important;
+        flex-direction: column !important;
     }
 
     .global-sidebar.open {
@@ -529,14 +526,21 @@ html.theme-cyber .form-textarea {
     }
 
     .sidebar-context {
+        flex: 0 0 auto !important;
         padding: 10px !important;
         margin-bottom: 10px;
     }
 
+    .sidebar-footer {
+        flex: 0 0 auto !important;
+    }
+
     .session-zone {
-        flex: 1 1 auto !important;
-        min-height: min(56dvh, 540px) !important;
+        flex: 1 1 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
         padding: 14px !important;
+        overflow: hidden !important;
     }
 
     .session-search {
@@ -545,11 +549,13 @@ html.theme-cyber .form-textarea {
     }
 
     .session-list {
-        flex: 1 1 auto !important;
-        min-height: 0;
+        flex: 1 1 0 !important;
+        height: 0 !important;
+        min-height: 0 !important;
         padding: 2px 4px 18px 0 !important;
         gap: 10px !important;
         overflow-y: auto !important;
+        touch-action: pan-y;
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
     }
@@ -603,10 +609,6 @@ html.theme-cyber .form-textarea {
 
     .global-sidebar.open {
         left: 0 !important;
-    }
-
-    .session-zone {
-        min-height: 60dvh !important;
     }
 
     .game-top-bar {
