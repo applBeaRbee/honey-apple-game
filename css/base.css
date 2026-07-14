@@ -1,0 +1,113 @@
+/* ===== 全局重置 & 基础 ===== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+html {
+    font-family: var(--font-main);
+    -webkit-font-smoothing: antialiased;
+    font-size: 15px;
+}
+body {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #2b1d14;
+    color: var(--text-main);
+    margin: 0;
+    padding: 0;
+}
+
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(141, 110, 99, 0.3);
+    border-radius: 10px;
+}
+
+/* ===== 应用布局 ===== */
+.app-wrapper {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    flex: 1;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+}
+
+/* ===== 全局文字溢出处理 ===== */
+.break-text {
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+    hyphens: auto !important;
+}
+
+.main-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background: transparent;
+}
+
+/* ===== 动画关键帧 ===== */
+@keyframes pulseDots {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+}
+@keyframes pulseMic {
+    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes goldGlow {
+    from { box-shadow: inset 0 0 5px #f1c40f, 0 2px 5px rgba(241, 196, 15, 0.2); }
+    to { box-shadow: inset 0 0 15px #f39c12, 0 4px 15px rgba(241, 196, 15, 0.4); }
+}
+@keyframes shineGlow {
+    0% { left: -100%; top: -100%; }
+    100% { left: 100%; top: 100%; }
+}
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fadeInCG {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes cgShake {
+    10%, 90% { transform: translate3d(-2px, 2px, 0); }
+    20%, 80% { transform: translate3d(4px, -4px, 0) rotate(1deg); }
+    30%, 50%, 70% { transform: translate3d(-6px, 6px, 0) rotate(-1deg); }
+    40%, 60% { transform: translate3d(6px, -6px, 0) rotate(1deg); }
+}
+@keyframes slideUpCG {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes skeletonShine {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+@keyframes pulseText {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}

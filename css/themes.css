@@ -1,0 +1,126 @@
+/* ===== 面板主题系统（灵感来自 ACU 可视化前端） ===== */
+/* 通过 CSS 变量实现主题切换 */
+
+/* 复古羊皮 */
+.theme-retro {
+    --panel-bg: #e6e2d3; --panel-text: #5e4b35; --panel-text-sub: #888;
+    --panel-border: #bfb29e; --panel-btn-bg: #d6ccbc; --panel-btn-hover: #cbbba8;
+    --panel-btn-active: #8d7b6f; --panel-btn-active-text: #fdfaf5;
+    --panel-card-bg: #fffef9; --panel-card-border: #bfb29e;
+    --panel-header-bg: #efebe4; --panel-shadow: rgba(0,0,0,0.1);
+    --panel-sidebar-bg: #e6e2d3; --panel-accent: #d35400;
+    --panel-badge-bg: #efebe4; --panel-input-bg: rgba(255,255,255,0.5);
+}
+
+/* 极夜深空 */
+.theme-dark {
+    --panel-bg: rgba(25, 25, 25, 0.95); --panel-text: #eee; --panel-text-sub: #aaa;
+    --panel-border: #555; --panel-btn-bg: #3a3a3a; --panel-btn-hover: #4a4a4a;
+    --panel-btn-active: #6a5acd; --panel-btn-active-text: #fff;
+    --panel-card-bg: rgba(35, 35, 35, 0.9); --panel-card-border: #555;
+    --panel-header-bg: rgba(40, 40, 40, 0.9); --panel-shadow: rgba(0,0,0,0.6);
+    --panel-sidebar-bg: rgba(30, 30, 30, 0.95); --panel-accent: #6a5acd;
+    --panel-badge-bg: #3a3f4b; --panel-input-bg: rgba(0,0,0,0.3);
+}
+
+/* 现代清爽 */
+.theme-modern {
+    --panel-bg: #f8f9fa; --panel-text: #333; --panel-text-sub: #6c757d;
+    --panel-border: #dee2e6; --panel-btn-bg: #e9ecef; --panel-btn-hover: #dee2e6;
+    --panel-btn-active: #0d6efd; --panel-btn-active-text: #fff;
+    --panel-card-bg: #ffffff; --panel-card-border: #dee2e6;
+    --panel-header-bg: #f8f9fa; --panel-shadow: rgba(0,0,0,0.08);
+    --panel-sidebar-bg: #ffffff; --panel-accent: #0d6efd;
+    --panel-badge-bg: #f1f3f5; --panel-input-bg: #ffffff;
+}
+
+/* 森之物语 */
+.theme-forest {
+    --panel-bg: #e8f5e9; --panel-text: #1b5e20; --panel-text-sub: #4caf50;
+    --panel-border: #a5d6a7; --panel-btn-bg: #c8e6c9; --panel-btn-hover: #a5d6a7;
+    --panel-btn-active: #2e7d32; --panel-btn-active-text: #fff;
+    --panel-card-bg: #ffffff; --panel-card-border: #a5d6a7;
+    --panel-header-bg: #dcedc8; --panel-shadow: rgba(0,0,0,0.1);
+    --panel-sidebar-bg: #e8f5e9; --panel-accent: #2e7d32;
+    --panel-badge-bg: #dcedc8; --panel-input-bg: rgba(255,255,255,0.7);
+}
+
+/* 深海幽蓝 */
+.theme-ocean {
+    --panel-bg: #f0f9ff; --panel-text: #0369a1; --panel-text-sub: #38bdf8;
+    --panel-border: #bae6fd; --panel-btn-bg: #e0f2fe; --panel-btn-hover: #bae6fd;
+    --panel-btn-active: #0ea5e9; --panel-btn-active-text: #fff;
+    --panel-card-bg: #ffffff; --panel-card-border: #bae6fd;
+    --panel-header-bg: #e0f2fe; --panel-shadow: rgba(3, 105, 161, 0.15);
+    --panel-sidebar-bg: #f0f9ff; --panel-accent: #0ea5e9;
+    --panel-badge-bg: #e0f2fe; --panel-input-bg: rgba(255,255,255,0.75);
+}
+
+/* 赛博霓虹 */
+.theme-cyber {
+    --panel-bg: #0a0a0a; --panel-text: #00ffcc; --panel-text-sub: #ff00ff;
+    --panel-border: #444; --panel-btn-bg: #1f1f1f; --panel-btn-hover: #333;
+    --panel-btn-active: #ff00ff; --panel-btn-active-text: #fff;
+    --panel-card-bg: #050505; --panel-card-border: #444;
+    --panel-header-bg: #111; --panel-shadow: 0 0 10px rgba(0,255,204,0.3);
+    --panel-sidebar-bg: #050505; --panel-accent: #00ffcc;
+    --panel-badge-bg: #222; --panel-input-bg: #111;
+}
+
+/* 浅粉落樱 */
+.theme-sakura {
+    --panel-bg: #fff9fb; --panel-text: #a85876; --panel-text-sub: #d49cb0;
+    --panel-border: #f0d4df; --panel-btn-bg: #fff0f5; --panel-btn-hover: #f8deea;
+    --panel-btn-active: #e090ad; --panel-btn-active-text: #fff;
+    --panel-card-bg: #ffffff; --panel-card-border: #f0d4df;
+    --panel-header-bg: #fff0f5; --panel-shadow: rgba(168, 88, 118, 0.1);
+    --panel-sidebar-bg: #fff9fb; --panel-accent: #a85876;
+    --panel-badge-bg: #fff0f5; --panel-input-bg: rgba(255,255,255,0.8);
+}
+
+/* 极光幻境 */
+.theme-aurora {
+    --panel-bg: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(51, 65, 85, 0.9));
+    --panel-text: #e2e8f0; --panel-text-sub: #94a3b8;
+    --panel-border: rgba(56, 189, 248, 0.6); --panel-btn-bg: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(168, 85, 247, 0.15));
+    --panel-btn-hover: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(168, 85, 247, 0.25));
+    --panel-btn-active: linear-gradient(135deg, #38bdf8, #a855f7); --panel-btn-active-text: #fff;
+    --panel-card-bg: linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+    --panel-card-border: rgba(56, 189, 248, 0.3);
+    --panel-header-bg: linear-gradient(90deg, rgba(56, 189, 248, 0.1), rgba(168, 85, 247, 0.1));
+    --panel-shadow: 0 8px 32px rgba(56, 189, 248, 0.15);
+    --panel-sidebar-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+    --panel-accent: #38bdf8; --panel-badge-bg: rgba(56, 189, 248, 0.2);
+    --panel-input-bg: rgba(15, 23, 42, 0.5);
+}
+
+/* 日落沙滩 */
+.theme-sunset {
+    --panel-bg: linear-gradient(180deg, #fffcf5, #fffafa); --panel-text: #8a4a3b; --panel-text-sub: #d97757;
+    --panel-border: rgba(251, 146, 60, 0.85); --panel-btn-bg: linear-gradient(135deg, rgba(251, 146, 60, 0.1), rgba(244, 114, 182, 0.1));
+    --panel-btn-hover: linear-gradient(135deg, rgba(251, 146, 60, 0.2), rgba(244, 114, 182, 0.2));
+    --panel-btn-active: linear-gradient(135deg, #ffab73, #f48fb1); --panel-btn-active-text: #fff;
+    --panel-card-bg: linear-gradient(145deg, #fffcf7, #fffafa); --panel-card-border: rgba(251, 146, 60, 0.5);
+    --panel-header-bg: linear-gradient(90deg, rgba(251, 191, 36, 0.1), rgba(251, 113, 133, 0.1));
+    --panel-shadow: 0 8px 32px rgba(251, 146, 60, 0.15);
+    --panel-sidebar-bg: linear-gradient(135deg, #fffaf0, #fff9e6, #fff5fa);
+    --panel-accent: #ffab73; --panel-badge-bg: #fffaf5;
+    --panel-input-bg: rgba(255,255,255,0.7);
+}
+
+/* 星际迷航 */
+.theme-starship {
+    --panel-bg: linear-gradient(180deg, rgba(30, 27, 75, 0.98), rgba(49, 46, 129, 0.95));
+    --panel-text: #e0e7ff; --panel-text-sub: #a5b4fc;
+    --panel-border: rgba(199, 210, 254, 0.6);
+    --panel-btn-bg: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(236, 72, 153, 0.15), rgba(34, 211, 238, 0.1));
+    --panel-btn-hover: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(236, 72, 153, 0.25), rgba(34, 211, 238, 0.2));
+    --panel-btn-active: linear-gradient(135deg, #6366f1, #ec4899, #22d3ee); --panel-btn-active-text: #fff;
+    --panel-card-bg: linear-gradient(145deg, rgba(30, 27, 75, 0.95), rgba(49, 46, 129, 0.9));
+    --panel-card-border: rgba(199, 210, 254, 0.3);
+    --panel-header-bg: linear-gradient(90deg, rgba(99, 102, 241, 0.15), rgba(236, 72, 153, 0.1));
+    --panel-shadow: 0 8px 40px rgba(99, 102, 241, 0.2);
+    --panel-sidebar-bg: radial-gradient(ellipse at top, rgba(30, 27, 75, 0.98), rgba(15, 23, 42, 0.95));
+    --panel-accent: #6366f1; --panel-badge-bg: rgba(99, 102, 241, 0.2);
+    --panel-input-bg: rgba(0,0,0,0.4);
+}

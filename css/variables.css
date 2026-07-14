@@ -1,0 +1,81 @@
+/* ===== 全局 CSS 变量 / 主题 ===== */
+:root {
+    --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-serif: "Palatino Linotype", "Book Antiqua", Palatino, "Songti SC", "Noto Serif SC", "Source Han Serif SC", "STSong", serif;
+    --font-mono: 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    --transition-smooth: 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+    --radius-xs: 4px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --bg-sidebar: #3e2723;
+    --bg-sidebar-hover: #4e342e;
+    --bg-main: #f5f0e6;
+    --bg-panel: #fdfbf7;
+    --bg-card: #f4ebd8;
+    --bg-chat-user: rgba(211, 118, 92, 0.15);
+    --bg-chat-sys: rgba(141, 110, 99, 0.08);
+    --text-main: #3e2723;
+    --text-sub: #5d4037;
+    --text-muted: #8d6e63;
+    --text-light: #d7ccc8;
+    --color-primary: #d3765c;
+    --color-primary-hover: #c0654e;
+    --color-success: #4caf50;
+    --color-danger: #e74c3c;
+    --color-info: #3498db;
+    --border-color: rgba(141, 110, 99, 0.3);
+    --border-color-strong: rgba(141, 110, 99, 0.6);
+    --shadow-sm: 0 2px 4px rgba(62, 39, 35, 0.08);
+    --shadow-md: 0 4px 12px rgba(62, 39, 35, 0.12);
+    --shadow-lg: 0 12px 24px rgba(62, 39, 35, 0.2);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ===== 暗色背景兼容 ===== */
+.ambient-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 1s ease;
+}
+.ambient-layer.time-morning {
+    background: radial-gradient(ellipse at 30% 20%, rgba(255, 200, 100, 0.12), transparent 70%);
+}
+.ambient-layer.time-dusk {
+    background: radial-gradient(ellipse at 50% 80%, rgba(255, 150, 50, 0.15), transparent 70%);
+}
+.ambient-layer.time-night {
+    background: radial-gradient(ellipse at 50% 50%, rgba(10, 20, 60, 0.25), transparent 80%);
+}
+.ambient-layer.weather-rain {
+    background: linear-gradient(to bottom, rgba(100, 140, 180, 0.08), transparent 60%);
+}
+.ambient-layer.weather-fog {
+    background: radial-gradient(ellipse at 50% 50%, rgba(200, 200, 200, 0.10), transparent 70%);
+}
+
+.think-box {
+    background: rgba(141, 110, 99, 0.06);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 6px 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border-left: 2px solid var(--text-muted);
+    font-family: var(--font-mono);
+}
+.think-box summary {
+    cursor: pointer;
+    font-weight: bold;
+    color: var(--text-sub);
+    font-family: var(--font-serif);
+}
+.think-box summary:hover {
+    color: var(--text-main);
+}

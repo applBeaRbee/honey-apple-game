@@ -1,0 +1,726 @@
+// ================= 剧情卡系统 (CRUD + 导入) =================
+import { appState } from './state.js';
+import { escapeHtml, generateId } from './constants.js';
+import { showToast, showConfirm, closeModal } from './ui.js';
+import { saveLocalData } from './storage.js';
+import { renderPanelPreviewHtml } from './panels.js';
+import { renderStructuredText, renderInfoCard } from './structured-renderer.js';
+import { renderSidebarSessions } from './sessions.js';
+
+// ===== 创建默认卡片 =====
+export function createDefaultCard() {
+    const defPanel = {
+        "人物核心": { "姓名": "{charName}", "等级": 1, "力量": 10, "生命值": "100/100" },
+        "随身行囊": [{ "name": "生锈的铁剑", "qty": 1, "desc": "略微破旧但很结实" }],
+        "状态记录": [],
+        "社交关系": { "节点": [{ "id": "{charName}", "name": "{charName}", "type": "主角", "color": "#d3765c" }], "连线": [] },
+        "区域地图": { "当前位置": "黑水镇", "区域": [{ "id": "黑水镇", "name": "黑水镇", "type": "村镇" }], "路线": [] }
+    };
+    return {
+        id: generateId('card'),
+        avatar: '📜',
+        name: '黑水镇佣兵传',
+        description: '边境小镇的传说...',
+        worldSetting: '中世纪奇幻世界。',
+        storyBackground: '你刚刚抵达黑水镇...',
+        defaultCharName: '亚瑟',
+        defaultCharInfo: '年轻的流浪剑客。',
+        systemPrompt: '你是硬核跑团DM，必须严格判定。',
+        authorsNote: '',
+        openingText: '伴随着刺耳的摩擦声，你推开了酒馆大门。',
+        lorebook: { "黑水镇": "边境中立城镇" },
+        panelTemplate: JSON.stringify(defPanel, null, 2),
+        created: Date.now()
+    };
+}
+
+// ===== 渲染头像（支持图片 URL 和 emoji） =====
+function renderAvatarHtml(avatar, size = '60px') {
+    if (!avatar || avatar === '📜' || avatar === '🖼️') {
+        return `<div class="avatar" style="width:${size};height:${size};font-size:${size === '60px' ? '1.8rem' : '3.5rem'};border-radius:50%;background:#e6decb;display:flex;align-items:center;justify-content:center;border:2px solid var(--border-color-strong);flex-shrink:0;overflow:hidden;">${escapeHtml(avatar||'📜')}</div>`;
+    }
+    // 如果是图片 URL（http/https/blob/data），显示为 <img>
+    if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('blob:') || avatar.startsWith('data:')) {
+        const imgSize = size === '60px' ? '60px' : '80px';
+        const borderRadius = size === '60px' ? '50%' : 'var(--radius-md)';
+        return `<div style="width:${imgSize};height:${imgSize};flex-shrink:0;overflow:hidden;border-radius:${borderRadius};border:2px solid var(--border-color-strong);background:var(--bg-card);"><img src="${escapeHtml(avatar)}" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.parentElement.innerHTML='📜';this.parentElement.style.display='flex';this.parentElement.style.alignItems='center';this.parentElement.style.justifyContent='center';this.parentElement.style.fontSize='${size === '60px' ? '1.8rem' : '3.5rem'}'"></div>`;
+    }
+    return `<div class="avatar" style="width:${size};height:${size};font-size:${size === '60px' ? '1.8rem' : '3.5rem'};border-radius:50%;background:#e6decb;display:flex;align-items:center;justify-content:center;border:2px solid var(--border-color-strong);flex-shrink:0;">${escapeHtml(avatar)}</div>`;
+}
+
+// ===== 渲染卡片库 =====
+export function renderLibrary() {
+    const grid = document.getElementById('cardGridUI');
+    if (!grid) return;
+    const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    grid.innerHTML =
+        `<div class="script-card action-card" onclick="openCardEditor()"><div class="icon">➕</div><div class="name" style="color:var(--color-primary);">新建剧本卡</div><div class="desc">构筑新世界</div></div>
+<div class="script-card action-card" onclick="openSillyTavernImportModal()"><div class="icon">📥</div><div class="name" style="color:var(--color-primary);">导入酒馆角色卡</div><div class="desc">从 SillyTavern PNG 导入</div></div>
+<div class="script-card action-card" onclick="document.getElementById('fileImportInput').click()"><div class="icon">📦</div><div class="name" style="color:var(--color-primary);">导入剧本包</div><div class="desc">读取 JSON</div><input type="file" id="fileImportInput" accept=".json" style="display:none;" onchange="importData(event)"></div>`;
+    appState.cards.forEach(card => {
+        if (search && !card.name.toLowerCase().includes(search) && !(card.storyBackground || '').toLowerCase().includes(search)) return;
+        const d = document.createElement('div');
+        d.className = 'script-card';
+        d.onclick = () => showCardDetail(card.id);
+        d.innerHTML =
+            `${renderAvatarHtml(card.avatar)}<div class="name">${escapeHtml(card.name)}</div><div class="desc">${escapeHtml(card.description||'...')}</div><div class="card-actions"><button class="card-action-btn" onclick="event.stopPropagation(); showCardDetail('${card.id}')" title="详情">📖</button><button class="card-action-btn" onclick="event.stopPropagation(); openCardEditor('${card.id}')">⚙️</button><button class="card-action-btn" onclick="event.stopPropagation(); duplicateCard('${card.id}')">📋</button><button class="card-action-btn" onclick="event.stopPropagation(); deleteCard('${card.id}')" style="color:var(--color-danger);">🗑️</button></div>`;
+        grid.appendChild(d);
+    });
+}
+
+// ===== 复制/编辑/删除卡片 =====
+export function duplicateCard(id) {
+    const card = appState.cards.find(c => c.id === id);
+    if (!card) return;
+    const nc = JSON.parse(JSON.stringify(card));
+    nc.id = generateId('card');
+    nc.name = nc.name + ' (副本)';
+    nc.created = Date.now();
+    appState.cards.unshift(nc);
+    saveLocalData();
+    renderLibrary();
+    showToast("复制成功", "success");
+}
+
+export function openCardEditor(cardId = null) {
+    const modal = document.getElementById('cardEditorModal');
+    if (!modal) return;
+    if (cardId) {
+        const card = appState.cards.find(c => c.id === cardId);
+        if (!card) return;
+        document.getElementById('cardEditorTitle').innerText = '✏️ 编辑剧本卡';
+        ['Id', 'Avatar', 'Name', 'World', 'Story', 'CharName', 'CharInfo', 'Prompt', 'Opening'].forEach(k => {
+            const el = document.getElementById('editCard' + k);
+            const dbK = k === 'CharName' ? 'defaultCharName' : k === 'CharInfo' ? 'defaultCharInfo' :
+                k === 'Prompt' ? 'systemPrompt' : k === 'Opening' ? 'openingText' : k === 'Story' ?
+                'storyBackground' : k === 'World' ? 'worldSetting' : k.toLowerCase();
+            el.value = card[dbK] || '';
+        });
+        document.getElementById('editCardPanelJSON').value = card.panelTemplate || '{}';
+    } else {
+        document.getElementById('cardEditorTitle').innerText = '✨ 撰写新剧本卡';
+        document.getElementById('editCardId').value = '';
+        document.getElementById('editCardAvatar').value = '📜';
+        document.getElementById('editCardName').value = '';
+        document.getElementById('editCardWorld').value = '';
+        document.getElementById('editCardStory').value = '';
+        document.getElementById('editCardCharName').value = '';
+        document.getElementById('editCardCharInfo').value = '';
+        document.getElementById('editCardPanelJSON').value = '{\n  "人物核心": { "姓名": "{charName}", "生命值": "100/100" },\n  "随身行囊": []\n}';
+        document.getElementById('editCardPrompt').value = '你是一个DM...';
+        document.getElementById('editCardOpening').value = '';
+    }
+    modal.style.display = 'flex';
+}
+
+export function saveCardEditor() {
+    const id = document.getElementById('editCardId').value;
+    const name = document.getElementById('editCardName').value.trim();
+    const panelJson = document.getElementById('editCardPanelJSON').value.trim();
+    if (!name) return showToast('名称不能为空', 'error');
+    if (panelJson) { try { JSON.parse(panelJson); } catch (e) { return showToast('JSON格式错误', 'error'); } }
+    const data = {
+        avatar: document.getElementById('editCardAvatar').value.trim(),
+        name: name,
+        description: document.getElementById('editCardStory').value.substring(0, 45) + '...',
+        worldSetting: document.getElementById('editCardWorld').value.trim(),
+        storyBackground: document.getElementById('editCardStory').value.trim(),
+        defaultCharName: document.getElementById('editCardCharName').value.trim(),
+        defaultCharInfo: document.getElementById('editCardCharInfo').value.trim(),
+        panelTemplate: panelJson,
+        systemPrompt: document.getElementById('editCardPrompt').value.trim(),
+        openingText: document.getElementById('editCardOpening').value.trim(),
+        lorebook: id ? (appState.cards.find(c => c.id === id)?.lorebook || {}) : {}
+    };
+    if (id) {
+        const idx = appState.cards.findIndex(c => c.id === id);
+        if (idx !== -1) appState.cards[idx] = { ...appState.cards[idx], ...data };
+    } else {
+        data.id = generateId('card');
+        data.created = Date.now();
+        appState.cards.unshift(data);
+    }
+    saveLocalData();
+    renderLibrary();
+    closeModal('cardEditorModal');
+    showToast("保存入库成功", "success");
+}
+
+export async function deleteCard(id) {
+    if (await showConfirm("确定删除此卡？")) {
+        appState.cards = appState.cards.filter(c => c.id !== id);
+        saveLocalData();
+        renderLibrary();
+    }
+}
+
+// ===== 卡片详情页 =====
+export function showCardDetail(cardId) {
+    const card = appState.cards.find(c => c.id === cardId);
+    if (!card) return;
+    const modal = document.getElementById('cardDetailModal');
+    if (!modal) return;
+    document.getElementById('detailCardId').value = cardId;
+
+    // 渲染面板预览（精美前端风格）
+    let panelPreviewHtml = renderPanelPreviewHtml(card.panelTemplate);
+    let hasPanels = panelPreviewHtml.length > 0;
+
+    let loreItems = '';
+    if (card.lorebook) {
+        loreItems += '<div style="display:flex;flex-direction:column;gap:4px;">';
+        for (const [k, v] of Object.entries(card.lorebook)) {
+            // 使用结构化渲染器
+            const rendered = renderInfoCard(k, v, '📖', '#8d6e63');
+            loreItems += rendered;
+        }
+        loreItems += '</div>';
+    }
+    if (!loreItems) loreItems = '<div style="color:var(--text-muted);font-style:italic;font-size:0.8rem;">无图鉴条目</div>';
+
+    document.getElementById('cardDetailContent').innerHTML = `
+        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+            ${renderAvatarHtml(card.avatar, '80px')}
+            <div style="flex:1;">
+                <div style="font-size:1.4rem;font-weight:800;font-family:var(--font-serif);color:var(--text-main);">${escapeHtml(card.name)}</div>
+                <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px;">${escapeHtml(card.description||'')}</div>
+                <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                    <span class="badge">👤 ${escapeHtml(card.defaultCharName||'无')}</span>
+                </div>
+            </div>
+        </div>
+        ${hasPanels ? `<div style="margin-bottom:16px;"><h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:8px;font-family:var(--font-serif);">📊 角色面板</h4>${panelPreviewHtml}</div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">🌍 世界观</h4>
+                <div class="panel-card" style="margin-bottom:10px;">${escapeHtml(card.worldSetting||'未设定')}</div>
+                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">📖 背景故事</h4>
+                <div class="panel-card" style="margin-bottom:10px;max-height:150px;overflow-y:auto;">${escapeHtml(card.storyBackground||'未设定')}</div>
+                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">🎭 角色设定</h4>
+                <div class="panel-card">${escapeHtml(card.defaultCharInfo||'未设定')}</div>
+            </div>
+            <div>
+                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">🤖 系统提示词</h4>
+                <div class="panel-card" style="max-height:120px;overflow-y:auto;font-size:0.8rem;">${escapeHtml(card.systemPrompt||'未设定')}</div>
+                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;margin-top:10px;font-family:var(--font-serif);">🎬 开场白</h4>
+                <div class="panel-card" style="max-height:100px;overflow-y:auto;font-style:italic;">${escapeHtml(card.openingText||'无')}</div>
+                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;margin-top:10px;font-family:var(--font-serif);">📇 图鉴 (${Object.keys(card.lorebook||{}).length}条)</h4>
+                ${loreItems}
+            </div>
+        </div>
+    `;
+    modal.style.display = 'flex';
+}
+
+export function startAdventureFromDetail() {
+    const cardId = document.getElementById('detailCardId')?.value;
+    if (!cardId) return;
+    closeModal('cardDetailModal');
+    if (typeof window.openSessionSetup === 'function') {
+        window.openSessionSetup(cardId);
+    }
+}
+
+// ===== 清理 SillyTavern 占位符 =====
+function cleanPlaceholders(text) {
+    if (!text) return '';
+    return text
+        .replace(/<StatusPlaceHolderImpl\/>/g, '')
+        .replace(/<\/?[A-Z][a-z]*PlaceHolder[A-Za-z]*\/?>/g, '')
+        .replace(/<UpdateVariable[^>]*>[\s\S]*?<\/UpdateVariable>/g, '')
+        .replace(/<Analysis>[\s\S]*?<\/Analysis>/g, '')
+        .replace(/<[A-Z][a-z]*\/>/g, '')
+        .replace(/\r\n\r\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+// ===== SillyTavern 角色卡解析和导入 (PNG 格式) =====
+// SillyTavern 角色卡标准格式：PNG 图片，角色数据以 base64 编码的 JSON 存储在 tEXt 块中
+
+export function parseSillyTavernCardFromPNG(arrayBuffer) {
+    if (!arrayBuffer || arrayBuffer.byteLength < 100) return null;
+    try {
+        const bytes = new Uint8Array(arrayBuffer);
+        
+        // 验证 PNG 签名
+        const pngSig = [137, 80, 78, 71, 13, 10, 26, 10];
+        for (let i = 0; i < 8; i++) {
+            if (bytes[i] !== pngSig[i]) return null;
+        }
+        
+        // 遍历 PNG 块，查找 tEXt 块并检查 keyword
+        let offset = 8;
+        let jsonData = null;
+        
+        const textDecoder = new TextDecoder('utf-8');
+        
+        while (offset + 12 <= bytes.length) {
+            const chunkLen = (bytes[offset] << 24) | (bytes[offset+1] << 16) |
+                            (bytes[offset+2] << 8) | bytes[offset+3];
+            const chunkType = String.fromCharCode(bytes[offset+4], bytes[offset+5],
+                                                  bytes[offset+6], bytes[offset+7]);
+            
+            if (chunkType === 'tEXt' && chunkLen > 0) {
+                const dataStart = offset + 8;
+                const chunkBytes = bytes.slice(dataStart, dataStart + chunkLen);
+                
+                // tEXt 格式: keyword (null-terminated) + text string
+                let nullPos = -1;
+                for (let i = 0; i < chunkBytes.length; i++) {
+                    if (chunkBytes[i] === 0) { nullPos = i; break; }
+                }
+                
+                if (nullPos > 0) {
+                    const keyword = textDecoder.decode(chunkBytes.slice(0, nullPos));
+                    // SillyTavern 使用 keyword: chara, ccv3, ccv2, ccv1
+                    if (['chara', 'ccv3', 'ccv2', 'ccv1'].includes(keyword)) {
+                        const encodedData = textDecoder.decode(chunkBytes.slice(nullPos + 1)).trim();
+                        // 数据是 base64 编码的 JSON，需要正确转换 UTF-8
+                        try {
+                            // atob 返回 Latin-1 字符串，需转成 UTF-8
+                            const latin1 = atob(encodedData);
+                            // 方法1: 用 TextDecoder 解码 UTF-8
+                            const utf8Bytes = new Uint8Array(latin1.length);
+                            for (let i = 0; i < latin1.length; i++) {
+                                utf8Bytes[i] = latin1.charCodeAt(i);
+                            }
+                            const decodedStr = new TextDecoder('utf-8').decode(utf8Bytes);
+                            jsonData = JSON.parse(decodedStr);
+                            break;
+                        } catch (_) {
+                            // 备用方案：escape/unescape 转换
+                            try {
+                                const latin1 = atob(encodedData);
+                                const decodedStr = decodeURIComponent(escape(latin1));
+                                jsonData = JSON.parse(decodedStr);
+                                break;
+                            } catch(__) {}
+                        }
+                    }
+                }
+            }
+            
+            offset += 12 + chunkLen;
+            if (chunkType === 'IEND') break;
+            if (offset > bytes.length) break;
+        }
+        
+        if (!jsonData) return null;
+        
+        // 解析角色数据 - SillyTavern V2/V3 格式
+        const charData = jsonData.data || jsonData;
+        
+        const card = {
+            id: generateId('card'),
+            created: Date.now(),
+            avatar: '🖼️',
+            name: charData.name || '未命名角色',
+            description: (charData.description || '').substring(0, 100),
+            // worldSetting: 优先用 extensions.world，其次 scenario，最后默认
+            worldSetting: charData.extensions?.world || charData.scenario || '奇幻冒险世界',
+            storyBackground: charData.description || '一段新的冒险...',
+            defaultCharName: charData.your_name || charData.player_name || '',
+            defaultCharInfo: charData.personality || '',
+            // systemPrompt: 合并 depth_prompt 和 system_prompt
+            systemPrompt: [
+                charData.system_prompt,
+                charData.creator_notes,
+                charData.instructions,
+                charData.extensions?.depth_prompt?.prompt
+            ].filter(Boolean).join('\n') || '你是硬核DM。',
+            // openingText: 清理 SillyTavern 占位符
+            openingText: cleanPlaceholders(charData.first_mes || charData.greeting || '故事开始了...'),
+            lorebook: {},
+            panelTemplate: '{}',
+            avatarDataUrl: null,
+            // 保存 character_book 原始数据，创建会话时注入 memoryDb
+            characterBookData: null
+        };
+        
+        // 如果有多条开场白，取第一条非占位符的
+        if (charData.alternate_greetings && Array.isArray(charData.alternate_greetings)) {
+            for (const g of charData.alternate_greetings) {
+                const cleaned = cleanPlaceholders(g);
+                if (cleaned && cleaned !== '故事开始了...') {
+                    card.openingText = cleaned;
+                    break;
+                }
+            }
+        }
+        
+        // 替换头像为 PNG 图片本身的 data URL
+        const blob = new Blob([arrayBuffer], { type: 'image/png' });
+        card.avatar = URL.createObjectURL(blob);
+        card.avatarDataUrl = card.avatar;
+        
+        // 尝试从 post_history_instructions 获取更多提示词
+        if (charData.post_history_instructions) {
+            card.systemPrompt = (card.systemPrompt + '\n' + charData.post_history_instructions).trim();
+        }
+        
+        // ===== 从 character_book 构建丰富的面板结构 =====
+        try {
+            let panels = null;
+            
+            if (charData.character_book?.entries && charData.character_book.entries.length > 0) {
+                panels = buildPanelsFromCharacterBook(charData, card);
+            }
+            
+            // 如果没有 character_book 或构建失败，用默认模板
+            if (!panels) {
+                panels = {
+                    "人物核心": { "姓名": card.defaultCharName || card.name || '{charName}', "状态": "正常" },
+                    "角色设定": card.defaultCharInfo ? [card.defaultCharInfo.substring(0, 500)] : [],
+                    "随身物品": []
+                };
+            }
+            
+            card.panelTemplate = JSON.stringify(panels, null, 2);
+        } catch (_) {}
+
+// ===== 从 character_book 构建面板 =====
+function buildPanelsFromCharacterBook(charData, card) {
+    const panels = {};
+    const entries = charData.character_book?.entries || [];
+    if (entries.length === 0) return null;
+    
+    // 1. 人物核心 - 基本信息
+    panels["人物核心"] = { 
+        "姓名": card.defaultCharName || card.name || '{charName}', 
+        "状态": "正常",
+        "所在地": entries.find(e => (e.content||'').includes('所在地'))?.content?.match(/所在地[：:]\s*([^\n<]+)/)?.[1] || '未知'
+    };
+    
+    // 2. 提取所有角色档案 → 社交关系
+    const charEntries = entries.filter(e => 
+        (e.comment||'').includes('角色档案') || e.comment?.includes('角色卡') || 
+        e.comment?.startsWith('role_') || (e.keys && e.keys.length > 0 && (e.content||'').includes('年龄'))
+    );
+    if (charEntries.length > 0) {
+        const nodes = [{ id: card.name || '{charName}', name: card.name || '{charName}', type: '主角', color: '#d3765c' }];
+        const links = [];
+        charEntries.forEach(e => {
+            const content = (e.content || '').replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ');
+            const nameMatch = content.match(/姓名[：:]\s*([\u4e00-\u9fa5]{2,4})/);
+            if (nameMatch) {
+                const npcName = nameMatch[1];
+                const relMatch = content.match(/与\{\{user\}\}关系[：:]\s*([^\n]+)/);
+                const rel = relMatch ? relMatch[1].trim() : '同学';
+                nodes.push({ id: npcName, name: npcName, type: 'npc', color: '#8d6e63' });
+                links.push({ source: card.name || '{charName}', target: npcName, label: rel, color: 'rgba(141,110,99,0.3)' });
+            }
+        });
+        if (nodes.length > 1) {
+            panels["社交关系"] = { "节点": nodes, "连线": links };
+        }
+        
+        // 2b. 角色档案面板 - 展示每个 NPC 的详细信息
+        const charPanel = {};
+        charEntries.forEach(e => {
+            const content = (e.content || '').replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ');
+            const nameMatch = content.match(/姓名[：:]\s*([\u4e00-\u9fa5]{2,4})/);
+            if (nameMatch) {
+                const npcName = nameMatch[1];
+                // 提取关键属性
+                const age = content.match(/年龄[：:]\s*([^\n]+)/)?.[1]?.trim() || '';
+                const identity = content.match(/身份[：:]\s*([^\n]+)/)?.[1]?.trim() || '';
+                const clsMatch = content.match(/(?:年级|班级)[：:]\s*([^\n]+)/);
+                const cls = clsMatch ? clsMatch[1].trim() : '';
+                const personality = content.match(/性格[：:]\s*([^\n]+)/)?.[1]?.trim() || '';
+                const desc = content.match(/印象[：:]\s*([^\n]+)/)?.[1]?.trim() || '';
+                
+                charPanel[npcName] = {
+                    "年龄": age || '未知',
+                    "身份": identity || '学生',
+                    "班级": cls || '',
+                    "性格": personality || ''
+                };
+                // 补充描述
+                if (desc) charPanel[npcName]["印象"] = desc;
+            }
+        });
+        if (Object.keys(charPanel).length > 0) {
+            panels["角色档案"] = charPanel;
+        }
+    }
+    
+    // 3. 物品条目 → 随身行囊
+    const itemEntries = entries.filter(e => 
+        (e.comment||'').startsWith('item_') || (e.comment||'').includes('物品')
+    );
+    if (itemEntries.length > 0) {
+        const items = [];
+        itemEntries.forEach(e => {
+            const content = (e.content || '').replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ');
+            const nameMatch = content.match(/物品名称[：:]\s*([^\n]+)/);
+            if (nameMatch) {
+                const descMatch = content.match(/性质[：:]\s*([^\n]+)/);
+                items.push({ 
+                    name: nameMatch[1].trim(), 
+                    qty: 1, 
+                    desc: descMatch ? descMatch[1].trim() : (content.substring(0, 50) || '重要物品')
+                });
+            }
+        });
+        if (items.length > 0) panels["随身行囊"] = items;
+    }
+    
+    // 4. 世界观/学校 → 基本信息面板
+    const worldEntry = entries.find(e => 
+        (e.comment||'').startsWith('world_') || (e.comment||'').includes('世界观') ||
+        (e.comment||'').includes('学校') && (e.comment||'').includes('概况')
+    );
+    if (worldEntry) {
+        const content = (worldEntry.content || '').replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        panels["世界观"] = { "设定": content.substring(0, 200) };
+    }
+    
+    // 5. 校规/规则
+    const ruleEntries = entries.filter(e => 
+        (e.comment||'').startsWith('rule_') || (e.comment||'').includes('校规')
+    );
+    if (ruleEntries.length > 0) {
+        panels["校规"] = [];
+        ruleEntries.forEach(e => {
+            const content = (e.content || '').replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            if (content) panels["校规"].push(content.substring(0, 200));
+        });
+    }
+    
+    // 6. 作息/活动 → 状态记录
+    const activityEntries = entries.filter(e => 
+        (e.comment||'').includes('作息') || (e.comment||'').includes('时间表') ||
+        (e.comment||'').startsWith('activity_')
+    );
+    if (activityEntries.length > 0) {
+        panels["校园活动"] = [];
+        activityEntries.forEach(e => {
+            const content = (e.content || '').replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            if (content) panels["校园活动"].push({ title: e.comment || '活动', status: '进行中', desc: content.substring(0, 200) });
+        });
+    }
+    
+    // 7. 区域/地点 → 区域地图
+    const locEntries = entries.filter(e => 
+        (e.comment||'').includes('学校') || (e.comment||'').includes('校园') ||
+        (e.comment||'').includes('建筑') || (e.comment||'').includes('位置')
+    );
+    if (locEntries.length > 0 || true) {  // 至少给出一个基本地图
+        const areaName = card.extensions?.world || charData.extensions?.world || '圣樱学院';
+        panels["区域地图"] = { 
+            "当前位置": areaName, 
+            "区域": [{ id: areaName, name: areaName, type: '学院' }], 
+            "路线": [] 
+        };
+    }
+    
+    return Object.keys(panels).length > 0 ? panels : null;
+}
+        
+        // 解析标签
+        if (charData.tags && Array.isArray(charData.tags)) {
+            const lb = {};
+            charData.tags.forEach(tag => {
+                if (typeof tag === 'string') lb[tag] = '角色标签';
+            });
+            if (Object.keys(lb).length > 0) card.lorebook = lb;
+        }
+        
+        // 解析 character_book (世界书/图鉴) - 这是 SillyTavern 的核心数据
+        if (charData.character_book?.entries) {
+            // 保存原始数据供创建会话时注入 memoryDb
+            card.characterBookData = charData.character_book;
+            
+            const lb = card.lorebook || {};
+            for (const entry of charData.character_book.entries) {
+                // 用 comment 作为键名
+                const key = entry.comment || (entry.keys && entry.keys[0]) || '条目';
+                // 清理内容的 HTML 标签，提取纯文本前 300 字
+                let content = (entry.content || '')
+                    .replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                if (content.length > 300) content = content.substring(0, 300) + '...';
+                if (key && content) {
+                    lb[key] = content;
+                }
+                
+                // 尝试从特定条目提取世界观和背景故事
+                const lowerKey = key.toLowerCase();
+                const lowerContent = (entry.content || '').toLowerCase();
+                
+                // 世界观类条目
+                if ((lowerKey.includes('world') || lowerKey.includes('世界观') || 
+                     lowerKey.includes('school') || lowerKey.includes('学校')) && 
+                    entry.content && entry.content.length > 50) {
+                    const plainText = entry.content.replace(/<br/?>/gi, '
+').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    if (plainText.length > 50) {
+                        // 如果卡片的世界观还是默认值，用这个替换
+                        if (card.worldSetting === '奇幻冒险世界' || !card.worldSetting) {
+                            card.worldSetting = plainText.substring(0, 500);
+                        }
+                        if (card.storyBackground === '一段新的冒险...' || !card.storyBackground) {
+                            card.storyBackground = plainText.substring(0, 800);
+                        }
+                    }
+                }
+            }
+            card.lorebook = lb;
+        }
+        
+        return card;
+        
+    } catch (e) {
+        console.error('解析 PNG 角色卡失败:', e);
+        return null;
+    }
+}
+
+export function openSillyTavernImportModal() {
+    const modal = document.getElementById('sillyTavernImportModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+}
+
+export function importSillyTavernFromFile() {
+    const input = document.getElementById('stFileInput');
+    if (!input || !input.files?.[0]) return showToast('请选择角色卡 PNG 文件', 'warning');
+    const file = input.files[0];
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const card = parseSillyTavernCardFromPNG(e.target.result);
+        if (!card) {
+            showToast('❌ 无法解析该文件，请确认是有效的 SillyTavern 角色卡 PNG', 'error', 5000);
+            return;
+        }
+        
+        // 如果解析出头像 URL，替换默认头像
+        if (card.avatarDataUrl) {
+            card.avatar = card.avatarDataUrl;
+        }
+        
+        appState.cards.unshift(card);
+        saveLocalData();
+        renderLibrary();
+        closeModal('sillyTavernImportModal');
+        showToast('✅ 成功导入角色卡: ' + card.name, 'success');
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+export function importSillyTavernFromPaste() {
+    // 从粘贴框导入也支持
+    const html = document.getElementById('stPasteInput')?.value?.trim();
+    if (!html) return showToast('请粘贴内容', 'warning');
+    
+    // 尝试做为 URL 解码导入
+    try {
+        // 如果粘贴的是 base64 编码的 JSON
+        const jsonStr = atob(html);
+        const jsonData = JSON.parse(jsonStr);
+        // ... 解析角色数据 ...
+        // 如果不行，尝试 HTML 解析
+        const card = parseSillyTavernCard(html);
+        if (!card) return showToast('无法解析粘贴内容', 'error');
+        appState.cards.unshift(card);
+        saveLocalData();
+        renderLibrary();
+        closeModal('sillyTavernImportModal');
+        showToast('✅ 成功导入角色卡: ' + card.name, 'success');
+    } catch (_) {
+        showToast('粘贴内容格式不支持，请使用 PNG 文件导入', 'warning');
+    }
+}
+
+// === 也支持 HTML 格式的解析 (备用) ===
+export function parseSillyTavernCard(htmlContent) {
+    if (!htmlContent || typeof htmlContent !== 'string') return null;
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        const card = {};
+        const avatarImg = doc.querySelector('.character-portrait img, .char-portrait img, .avatar img');
+        card.avatar = avatarImg?.getAttribute('src') || '📜';
+        const nameEl = doc.querySelector('.character-name h1, .char-name h1, .character-name, .char-name, [data-name]');
+        card.name = nameEl?.textContent?.trim() || '未命名角色';
+        const descEl = doc.querySelector('.character-bio p, .char-bio p, .character-bio, .char-bio, .description p');
+        card.description = descEl?.textContent?.trim() || '';
+        const findText = (selectors) => {
+            for (const s of selectors) {
+                const el = doc.querySelector(s);
+                if (el?.textContent?.trim()) return el.textContent.trim();
+            }
+            return '';
+        };
+        card.worldSetting = findText(['.world-setting .content', '.world-setting', '.background-text', '[data-world]']) || '奇幻冒险世界';
+        card.storyBackground = findText(['.story-background', '.background-story', '.story-text', '.char-desc', '[data-story]']) || '一段新的冒险即将开始...';
+        card.defaultCharName = findText(['.player-name', '.main-char-name', '[data-player-name]']) || '冒险者';
+        card.defaultCharInfo = findText(['.player-desc', '.player-info', '.char-info', '[data-char-info]']) || '勇敢的旅人。';
+        card.systemPrompt = findText(['.ai-prompt', '.system-prompt', '.system-instructions', '[data-system-prompt]']) || '你是硬核DM，严格判定。';
+        card.openingText = findText(['.opening-text', '.first-scene', '.opening', '[data-opening]']) || '故事开始了...';
+        
+        let panelData = {};
+        const scriptData = doc.querySelector('script[type="application/json"], script.panel-data');
+        if (scriptData) {
+            try { panelData = JSON.parse(scriptData.textContent); } catch (_) {}
+        }
+        if (!panelData || Object.keys(panelData).length === 0) {
+            panelData = {
+                "人物核心": { "姓名": card.defaultCharName || "{charName}", "等级": 1, "生命值": "100/100" },
+                "随身行囊": [{ "name": "冒险者背包", "qty": 1, "desc": "基础冒险装备" }],
+                "状态记录": [],
+                "社交关系": { "节点": [{ "id": card.defaultCharName || "{charName}", "name": card.defaultCharName || "{charName}", "type": "主角", "color": "#d3765c" }], "连线": [] },
+                "区域地图": { "当前位置": "出发地", "区域": [{ "id": "出发地", "name": "出发地", "type": "村镇" }], "路线": [] }
+            };
+        }
+        card.panelTemplate = JSON.stringify(panelData, null, 2);
+        
+        const lorebook = {};
+        doc.querySelectorAll('.lore-item, .lore-entry').forEach(el => {
+            const key = el.querySelector('.lore-title, .lore-key, .term')?.textContent?.trim();
+            const val = el.querySelector('.lore-content, .lore-value, .definition')?.textContent?.trim();
+            if (key && val) lorebook[key] = val;
+        });
+        
+        return {
+            id: generateId('card'),
+            created: Date.now(),
+            avatar: card.avatar || '📜',
+            name: card.name,
+            description: card.description,
+            worldSetting: card.worldSetting,
+            storyBackground: card.storyBackground,
+            defaultCharName: card.defaultCharName || '冒险者',
+            defaultCharInfo: card.defaultCharInfo || '一位勇敢的冒险者。',
+            panelTemplate: card.panelTemplate,
+            systemPrompt: card.systemPrompt,
+            openingText: card.openingText,
+            lorebook: lorebook
+        };
+    } catch (e) {
+        console.error('解析 HTML 角色卡失败:', e);
+        return null;
+    }
+}
+
+// ===== 导出到 window =====
+window.openCardEditor = openCardEditor;
+window.saveCardEditor = saveCardEditor;
+window.deleteCard = deleteCard;
+window.duplicateCard = duplicateCard;
+window.renderLibrary = renderLibrary;
+window.showCardDetail = showCardDetail;
+window.startAdventureFromDetail = startAdventureFromDetail;
+window.openSillyTavernImportModal = openSillyTavernImportModal;
+window.importSillyTavernFromFile = importSillyTavernFromFile;
+window.importSillyTavernFromPaste = importSillyTavernFromPaste;

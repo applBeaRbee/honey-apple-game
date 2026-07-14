@@ -1,0 +1,192 @@
+/* ===== Toast ===== */
+.toast-container {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    max-width: calc(100vw - 24px);
+}
+.toast {
+    background: var(--bg-sidebar);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 4px solid var(--color-primary);
+    padding: 12px 18px;
+    border-radius: var(--radius-xs);
+    box-shadow: var(--shadow-lg);
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #f5f0e6;
+    animation: slideIn 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-serif);
+    letter-spacing: 0.3px;
+    word-break: break-word;
+}
+
+/* ===== CG 切入 ===== */
+.cg-cutin-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    width: 100vw;
+    height: 100vh;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    animation: fadeInCG 0.3s;
+}
+.cg-cutin-img {
+    max-width: 92vw;
+    max-height: 45vh;
+    border: 3px solid var(--color-primary);
+    box-shadow: 0 0 40px rgba(211, 118, 92, 0.8);
+    animation: cgShake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+    object-fit: cover;
+    display: none;
+    border-radius: 4px;
+}
+.cg-cutin-text {
+    position: absolute;
+    bottom: 18%;
+    color: white;
+    font-size: 1.2rem;
+    font-family: var(--font-serif);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 1);
+    letter-spacing: 2px;
+    text-align: center;
+    animation: slideUpCG 0.5s ease-out;
+    padding: 0 16px;
+}
+
+/* ===== 画廊 ===== */
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    padding: 6px;
+    max-height: 55vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.gallery-item {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #000;
+    position: relative;
+    aspect-ratio: 1;
+}
+.gallery-item:hover { transform: scale(1.05); border-color: var(--color-primary); z-index: 2; box-shadow: var(--shadow-lg); }
+.gallery-item:active { transform: scale(0.95); }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; transition: opacity 0.2s; }
+.gallery-item:hover img { opacity: 1; }
+.gallery-item-name {
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    background: rgba(0, 0, 0, 0.7); color: white;
+    font-size: 0.7rem; padding: 4px 6px; text-align: center;
+    font-family: var(--font-serif); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+
+.img-wrapper {
+    position: relative; display: inline-block;
+    width: 100%; max-width: 280px; min-height: 150px;
+    margin: 0 auto 12px; border-radius: 8px;
+    border: 1px solid rgba(241, 196, 15, 0.3);
+    background: #111; overflow: hidden;
+    box-shadow: 0 0 20px rgba(241, 196, 15, 0.2);
+}
+.img-wrapper img { width: 100%; height: 100%; object-fit: cover; display: none; opacity: 0; transition: opacity 0.5s ease; }
+.img-wrapper.loaded img { display: block; opacity: 1; }
+.img-skeleton {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #8d6e63; font-size: 0.8rem;
+    background: linear-gradient(90deg, #1a1a1a 25%, #262626 50%, #1a1a1a 75%);
+    background-size: 200% 100%; animation: skeletonShine 1.5s infinite linear;
+}
+.img-wrapper.loaded .img-skeleton { display: none !important; }
+
+.spinner {
+    width: 26px; height: 26px;
+    border: 3px solid rgba(241, 196, 15, 0.2);
+    border-top-color: #f1c40f;
+    border-radius: 50%; animation: spin 1s infinite linear;
+    margin-bottom: 6px;
+}
+
+/* ===== 时间流逝 ===== */
+.time-pass-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(20, 12, 8, 0.92);
+    z-index: 11000; display: none;
+    flex-direction: column; justify-content: center; align-items: center;
+    opacity: 0; transition: opacity 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.clock-container {
+    width: 120px; height: 120px;
+    border: 4px solid var(--color-primary); border-radius: 50%;
+    position: relative;
+    box-shadow: 0 0 40px rgba(211, 118, 92, 0.4), inset 0 0 20px rgba(211, 118, 92, 0.2);
+    background: #2b1d14; margin-bottom: 24px;
+}
+.clock-container::before {
+    content: ''; position: absolute; top: 5px; left: 5px;
+    right: 5px; bottom: 5px; border-radius: 50%;
+    border: 1px dashed rgba(245, 240, 230, 0.2);
+}
+.clock-center {
+    width: 10px; height: 10px; background: #f5f0e6; border-radius: 50%;
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%); z-index: 5;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+.clock-hand {
+    position: absolute; bottom: 50%; left: 50%;
+    transform-origin: bottom center; background: #f5f0e6;
+    border-radius: 4px; transform: translateX(-50%) rotate(0deg);
+}
+.hour-hand { width: 4px; height: 34px; background: var(--color-primary); }
+.minute-hand { width: 3px; height: 46px; background: #d7ccc8; }
+.time-pass-text {
+    color: #f5f0e6; font-size: 1.2rem; font-family: var(--font-serif);
+    letter-spacing: 3px; animation: pulseText 1.5s infinite;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+    font-weight: bold; text-align: center; padding: 0 16px;
+}
+
+/* ===== 导出 ===== */
+.export-card-item {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; padding: 6px 8px;
+    background: var(--bg-card); border-radius: var(--radius-xs);
+    border: 1px solid var(--border-color); transition: all 0.2s;
+    touch-action: manipulation;
+}
+.export-card-item:hover { border-color: var(--border-color-strong); background: var(--bg-panel); }
+.export-card-item input[type="checkbox"] {
+    width: 18px; height: 18px; cursor: pointer; flex-shrink: 0;
+    accent-color: var(--color-primary);
+}
+.export-card-item .card-info {
+    flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.export-card-item .card-avatar-sm { font-size: 1.1rem; flex-shrink: 0; }
+.export-card-item .card-name-sm {
+    font-size: 0.8rem; color: var(--text-main); font-weight: bold;
+    font-family: var(--font-serif); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
