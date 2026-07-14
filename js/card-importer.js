@@ -727,9 +727,9 @@ export function extractFrontendAssets(data) {
 }
 
 function extractHtmlSnippet(value) {
-    const text = decodeHtmlEntities(String(value || '').trim());
+    const text = normalizeFrontendSource(String(value || '').trim());
     const fenced = text.match(/```(?:html|text)?\s*([\s\S]*?)\s*```/i);
-    const body = (fenced ? fenced[1] : text).trim();
+    const body = sliceHtmlDocument((fenced ? fenced[1] : text).trim());
     if (!/<(?:!doctype|html|head|div|details|style|body|iframe|section|article|span|p|script)\b/i.test(body)) return '';
     return body;
 }
@@ -746,8 +746,44 @@ function sanitizeFrontendHtml(value) {
 }
 
 function decodeHtmlEntities(value) {
-    if (!/[&](?:lt|gt|amp|quot|#39|apos);/i.test(value)) return value;
+    let decoded = value;
     const textarea = document.createElement('textarea');
-    textarea.innerHTML = value;
-    return textarea.value;
+    for (let i = 0; i < 4; i += 1) {
+        if (!/[&](?:lt|gt|amp|quot|#39|apos);/i.test(decoded)) break;
+        textarea.innerHTML = decoded;
+        const next = textarea.value;
+        if (next === decoded) break;
+        decoded = next;
+    }
+    return decoded;
+}
+
+function normalizeFrontendSource(value) {
+    let text = decodeHtmlEntities(value)
+        .replace(/\\u003c/gi, '<')
+        .replace(/\\u003e/gi, '>')
+        .replace(/\\u0026/gi, '&');
+    if (/\\[nrt"]/.test(text)) {
+        try {
+            text = JSON.parse(`"${text.replace(/"/g, '\\"')}"`);
+        } catch (_) {}
+    }
+    return decodeHtmlEntities(text).trim();
+}
+
+function sliceHtmlDocument(value) {
+    const starts = ['<!doctype', '<html', '<head', '<body', '<div', '<section', '<article', '<style'];
+    const lower = value.toLowerCase();
+    const start = starts.reduce((best, marker) => {
+        const index = lower.indexOf(marker);
+        return index >= 0 && (best < 0 || index < best) ? index : best;
+    }, -1);
+    if (start < 0) return value;
+    let html = value.slice(start).trim();
+    const endMarkers = ['</html>', '</body>', '</head>'];
+    for (const marker of endMarkers) {
+        const index = html.toLowerCase().lastIndexOf(marker);
+        if (index >= 0) return html.slice(0, index + marker.length).trim();
+    }
+    return html.replace(/[`'";\s]+$/g, '').trim();
 }

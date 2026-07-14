@@ -62,7 +62,7 @@ export function renderFrontendAssetsHtml(assets = []) {
                 const title = `${asset.disabled ? '已禁用 · ' : ''}${asset.name || '内置前端'}`;
                 const frame = asset.sourceUrl
                     ? `<iframe class="frontend-preview-frame" src="${escapeHtml(asset.sourceUrl)}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe>`
-                    : `<iframe class="frontend-preview-frame" srcdoc="${escapeHtml(buildFrontendSrcdoc(asset.html || ''))}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe>`;
+                    : `<iframe class="frontend-preview-frame" src="${buildFrontendDataUrl(asset.html || '')}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe>`;
                 return `<article class="frontend-preview-card">
                     <div class="frontend-preview-head"><strong>${escapeHtml(title)}</strong>${asset.sourceUrl ? `<a href="${escapeHtml(asset.sourceUrl)}" target="_blank" rel="noopener noreferrer">打开源页面</a>` : ''}</div>
                     ${frame}
@@ -77,17 +77,86 @@ export function buildFrontendSrcdoc(html) {
     if (!source) {
         return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body><div>无可预览内容</div></body></html>`;
     }
-    if (/^\s*(?:<!doctype\s+html[^>]*>|<html\b|<head\b)/i.test(source)) return source;
+    if (/^\s*<!doctype\s+html[^>]*>/i.test(source) || /^\s*<html\b/i.test(source)) return source;
+    if (/^\s*<head\b/i.test(source)) {
+        const hasBody = /<body\b/i.test(source);
+        return `<!doctype html><html>${source}${hasBody ? '' : '<body></body>'}</html>`;
+    }
     return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body>${source}</body></html>`;
     return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body>${html || '<div>无可预览内容</div>'}</body></html>`;
 }
 
 // ===== 渲染卡片库 =====
+export function buildFrontendDataUrl(html) {
+    return `data:text/html;charset=utf-8;base64,${encodeFrontendPayload(buildFrontendSrcdoc(html))}`;
+}
+
+export function mountFrontendFrames(root = document) {
+    root.querySelectorAll?.('.frontend-preview-frame[data-frontend-payload]').forEach(frame => {
+        if (frame.dataset.frontendMounted === 'true') return;
+        const payload = frame.dataset.frontendPayload;
+        frame.dataset.frontendMounted = 'true';
+        const writeFrame = () => {
+            try {
+                const doc = frame.contentDocument;
+                if (!doc) throw new Error('iframe document unavailable');
+                doc.open();
+                doc.write(decodeFrontendPayload(payload));
+                doc.close();
+            } catch (error) {
+                console.warn('内置前端渲染失败:', error);
+                frame.removeAttribute('data-frontend-mounted');
+            }
+        };
+        frame.addEventListener('load', writeFrame, { once: true });
+        if (frame.contentDocument?.readyState === 'complete') writeFrame();
+    });
+}
+
+function encodeFrontendPayload(value) {
+    const bytes = new TextEncoder().encode(String(value || ''));
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+}
+
+function decodeFrontendPayload(value) {
+    const binary = atob(value || '');
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+}
+
 function decodeFrontendHtml(value) {
-    if (!/[&](?:lt|gt|amp|quot|#39|apos);/i.test(value)) return value;
+    let decoded = String(value || '');
     const textarea = document.createElement('textarea');
-    textarea.innerHTML = value;
-    return textarea.value;
+    for (let i = 0; i < 4; i += 1) {
+        if (!/[&](?:lt|gt|amp|quot|#39|apos);/i.test(decoded)) break;
+        textarea.innerHTML = decoded;
+        const next = textarea.value;
+        if (next === decoded) break;
+        decoded = next;
+    }
+    decoded = decoded
+        .replace(/\\u003c/gi, '<')
+        .replace(/\\u003e/gi, '>')
+        .replace(/\\u0026/gi, '&');
+    const lower = decoded.toLowerCase();
+    const markers = ['<!doctype', '<html', '<head', '<body', '<div', '<section', '<article', '<style'];
+    const indexes = markers.map(marker => lower.indexOf(marker)).filter(index => index >= 0);
+    if (indexes.length) {
+        decoded = decoded.slice(Math.min(...indexes));
+        const endMarkers = ['</html>', '</body>', '</head>'];
+        for (const marker of endMarkers) {
+            const index = decoded.toLowerCase().lastIndexOf(marker);
+            if (index >= 0) {
+                decoded = decoded.slice(0, index + marker.length);
+                break;
+            }
+        }
+    }
+    return decoded.trim();
 }
 
 function arrayBufferToDataUrl(arrayBuffer, mime = 'image/png') {
@@ -271,6 +340,7 @@ export function showCardDetail(cardId) {
             </div>
         </div>
     `;
+    requestAnimationFrame(() => mountFrontendFrames(document.getElementById('cardDetailContent')));
     modal.style.display = 'flex';
 }
 

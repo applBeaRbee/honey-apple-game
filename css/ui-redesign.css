@@ -770,6 +770,10 @@ select {
     display: none;
 }
 
+.mobile-only-tool {
+    display: none;
+}
+
 /* Game content */
 .game-main-area {
     flex: 1;
@@ -1691,34 +1695,41 @@ select.form-input {
     }
 
     .mobile-collapse-tool {
-        display: none !important;
+        display: flex !important;
     }
 
     .mobile-menu-tool {
-        display: block;
+        display: none !important;
+    }
+
+    .mobile-only-tool {
+        display: flex !important;
+    }
+
+    .game-top-bar .top-more-wrap {
+        display: none !important;
     }
 
     .game-top-bar .actions {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        align-items: stretch;
-        overflow: visible;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        width: 100%;
+        padding-bottom: 7px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
         gap: 6px;
     }
 
-    .game-top-bar .actions > .top-btn,
-    .game-top-bar .actions > .top-more-wrap {
-        min-width: 0;
-        width: 100%;
-    }
-
-    .game-top-bar .actions > .top-btn,
-    .top-more-toggle {
+    .game-top-bar .actions > .top-btn {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: max-content;
         justify-content: center;
-        min-width: 0;
-        width: 100%;
-        padding-left: 6px;
-        padding-right: 6px;
+        padding-left: 10px;
+        padding-right: 10px;
         font-size: 0.72rem;
     }
 
@@ -1747,6 +1758,9 @@ select.form-input {
     .game-main-area.show-panel {
         display: flex !important;
         flex-direction: column;
+        flex: 1 1 0;
+        height: auto !important;
+        min-height: 0 !important;
     }
 
     .game-main-area.show-panel .game-sidebar {
@@ -1754,15 +1768,31 @@ select.form-input {
         flex: 0 0 auto;
         max-height: none;
         min-height: 48px;
+        height: 56px;
         width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
     }
 
     .game-main-area.show-panel .panel-content-area {
         display: flex !important;
-        flex: 1 1 0;
-        height: auto;
+        flex: 1 1 0 !important;
+        height: 0 !important;
         min-height: 0;
         overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .game-main-area.show-panel .panel-content-area .dynamic-panel.active {
+        display: block !important;
+        min-height: max-content;
+    }
+
+    #mobileGameNav {
+        position: relative;
+        z-index: 30;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
 
     .game-main-area.show-chat .game-sidebar,

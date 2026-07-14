@@ -1,7 +1,7 @@
 import { appState, currentSessionId } from './state.js';
 import { escapeHtml } from './constants.js';
 import { showToast } from './ui.js';
-import { renderFrontendAssetsHtml } from './cards.js';
+import { renderFrontendAssetsHtml, mountFrontendFrames } from './cards.js';
 import { saveLocalData } from './storage.js';
 import { extractFrontendAssets } from './card-importer.js';
 
@@ -28,6 +28,7 @@ export function openCurrentFrontendModal() {
         ? renderFrontendAssetsHtml(assets)
         : `<div class="frontend-empty-state"><strong>${escapeHtml(card.name || '当前角色卡')}</strong><span>这张卡没有解析到内置前端。</span></div>`;
     modal.style.display = 'flex';
+    requestAnimationFrame(() => mountFrontendFrames(content));
 }
 
 function getFrontendAssets(card) {
