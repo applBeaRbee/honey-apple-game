@@ -6,7 +6,7 @@ import { saveLocalData } from './storage.js';
 import { renderPanelPreviewHtml } from './panels.js';
 import { renderStructuredText, renderInfoCard } from './structured-renderer.js';
 import { renderSidebarSessions } from './sessions.js';
-import { buildLorebookFromCharacterBook, buildPanelsFromCharacterBook as buildImportedPanelsFromCharacterBook } from './card-importer.js';
+import { buildLorebookFromCharacterBook, buildPanelsFromCharacterBook as buildImportedPanelsFromCharacterBook, parseSillyTavernCharacterCard } from './card-importer.js';
 
 // ===== 创建默认卡片 =====
 export function createDefaultCard() {
@@ -56,7 +56,7 @@ export function renderLibrary() {
     const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
     grid.innerHTML =
         `<div class="script-card action-card" onclick="openCardEditor()"><div class="icon">➕</div><div class="name" style="color:var(--color-primary);">新建剧本卡</div><div class="desc">构筑新世界</div></div>
-<div class="script-card action-card" onclick="openSillyTavernImportModal()"><div class="icon">📥</div><div class="name" style="color:var(--color-primary);">导入酒馆角色卡</div><div class="desc">从 SillyTavern PNG 导入</div></div>
+<div class="script-card action-card" onclick="openSillyTavernImportModal()"><div class="icon">📥</div><div class="name" style="color:var(--color-primary);">导入酒馆角色卡</div><div class="desc">PNG / JSON / 粘贴内容</div></div>
 <div class="script-card action-card" onclick="document.getElementById('fileImportInput').click()"><div class="icon">📦</div><div class="name" style="color:var(--color-primary);">导入剧本包</div><div class="desc">读取 JSON</div><input type="file" id="fileImportInput" accept=".json" style="display:none;" onchange="importData(event)"></div>`;
     appState.cards.forEach(card => {
         if (search && !card.name.toLowerCase().includes(search) && !(card.storyBackground || '').toLowerCase().includes(search)) return;
@@ -179,34 +179,37 @@ export function showCardDetail(cardId) {
     }
     if (!loreItems) loreItems = '<div style="color:var(--text-muted);font-style:italic;font-size:0.8rem;">无图鉴条目</div>';
 
+    const tags = Array.isArray(card.tags) ? card.tags : [];
+    const metaBadges = [
+        card.defaultCharName ? `👤 ${escapeHtml(card.defaultCharName)}` : '',
+        card.spec ? `ST ${escapeHtml(card.specVersion || card.spec)}` : '',
+        card.characterBookData?.entries?.length ? `📚 ${card.characterBookData.entries.length} 条角色书` : ''
+    ].filter(Boolean);
+
     document.getElementById('cardDetailContent').innerHTML = `
-        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <div class="card-detail-hero">
             ${renderAvatarHtml(card.avatar, '80px')}
-            <div style="flex:1;">
-                <div style="font-size:1.4rem;font-weight:800;font-family:var(--font-serif);color:var(--text-main);">${escapeHtml(card.name)}</div>
-                <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px;">${escapeHtml(card.description||'')}</div>
-                <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
-                    <span class="badge">👤 ${escapeHtml(card.defaultCharName||'无')}</span>
+            <div class="card-detail-titleblock">
+                <div class="card-detail-name">${escapeHtml(card.name)}</div>
+                <div class="card-detail-desc">${escapeHtml(card.description||'')}</div>
+                <div class="card-detail-badges">
+                    ${metaBadges.map(item => `<span class="badge">${item}</span>`).join('')}
+                    ${tags.slice(0, 10).map(tag => `<span class="badge soft">#${escapeHtml(tag)}</span>`).join('')}
                 </div>
             </div>
         </div>
-        ${hasPanels ? `<div style="margin-bottom:16px;"><h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:8px;font-family:var(--font-serif);">📊 角色面板</h4>${panelPreviewHtml}</div>` : ''}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">🌍 世界观</h4>
-                <div class="panel-card" style="margin-bottom:10px;">${escapeHtml(card.worldSetting||'未设定')}</div>
-                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">📖 背景故事</h4>
-                <div class="panel-card" style="margin-bottom:10px;max-height:150px;overflow-y:auto;">${escapeHtml(card.storyBackground||'未设定')}</div>
-                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">🎭 角色设定</h4>
-                <div class="panel-card">${escapeHtml(card.defaultCharInfo||'未设定')}</div>
+        ${hasPanels ? `<section class="card-detail-section"><h4>📊 角色面板</h4>${panelPreviewHtml}</section>` : ''}
+        <div class="card-detail-grid">
+            <div class="card-detail-column">
+                <section class="card-detail-section"><h4>🌍 世界观</h4><div class="panel-card">${escapeHtml(card.worldSetting||'未设定')}</div></section>
+                <section class="card-detail-section"><h4>📖 背景故事</h4><div class="panel-card scroll-card">${escapeHtml(card.storyBackground||'未设定')}</div></section>
+                <section class="card-detail-section"><h4>🎭 角色设定</h4><div class="panel-card">${escapeHtml(card.defaultCharInfo||'未设定')}</div></section>
             </div>
-            <div>
-                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;font-family:var(--font-serif);">🤖 系统提示词</h4>
-                <div class="panel-card" style="max-height:120px;overflow-y:auto;font-size:0.8rem;">${escapeHtml(card.systemPrompt||'未设定')}</div>
-                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;margin-top:10px;font-family:var(--font-serif);">🎬 开场白</h4>
-                <div class="panel-card" style="max-height:100px;overflow-y:auto;font-style:italic;">${escapeHtml(card.openingText||'无')}</div>
-                <h4 style="font-size:0.9rem;color:var(--color-primary);margin-bottom:6px;margin-top:10px;font-family:var(--font-serif);">📇 图鉴 (${Object.keys(card.lorebook||{}).length}条)</h4>
-                ${loreItems}
+            <div class="card-detail-column">
+                <section class="card-detail-section"><h4>🤖 系统提示词</h4><div class="panel-card scroll-card compact-text">${escapeHtml(card.systemPrompt||'未设定')}</div></section>
+                <section class="card-detail-section"><h4>🎬 开场白</h4><div class="panel-card scroll-card italic-text">${escapeHtml(card.openingText||'无')}</div></section>
+                ${card.exampleMessages ? `<section class="card-detail-section"><h4>💬 示例对话</h4><div class="panel-card scroll-card compact-text">${escapeHtml(card.exampleMessages)}</div></section>` : ''}
+                <section class="card-detail-section"><h4>📇 图鉴 (${Object.keys(card.lorebook||{}).length}条)</h4>${loreItems}</section>
             </div>
         </div>
     `;
@@ -239,7 +242,7 @@ function cleanPlaceholders(text) {
 // ===== SillyTavern 角色卡解析和导入 (PNG 格式) =====
 // SillyTavern 角色卡标准格式：PNG 图片，角色数据以 base64 编码的 JSON 存储在 tEXt 块中
 
-export function parseSillyTavernCardFromPNG(arrayBuffer) {
+function parseSillyTavernCardFromPNGLegacy(arrayBuffer) {
     if (!arrayBuffer || arrayBuffer.byteLength < 100) return null;
     try {
         const bytes = new Uint8Array(arrayBuffer);
@@ -725,16 +728,43 @@ export function openSillyTavernImportModal() {
     modal.style.display = 'flex';
 }
 
+// 统一 PNG/JSON 角色卡入口。旧解析器保留在文件中作为历史兼容代码，但新导入不再走分叉逻辑。
+export function parseSillyTavernCardFromPNG(arrayBuffer) {
+    if (!arrayBuffer) return null;
+    try {
+        const blob = new Blob([arrayBuffer], { type: 'image/png' });
+        const avatar = URL.createObjectURL(blob);
+        const card = parseSillyTavernCharacterCard(arrayBuffer, { avatar });
+        if (!card) URL.revokeObjectURL(avatar);
+        return card;
+    } catch (error) {
+        console.error('解析 SillyTavern 角色卡失败:', error);
+        return null;
+    }
+}
+
+export function parseSillyTavernCardFromJSON(text) {
+    try {
+        const card = parseSillyTavernCharacterCard(text);
+        return card || parseSillyTavernCard(text);
+    } catch (error) {
+        console.error('解析 JSON 角色卡失败:', error);
+        return null;
+    }
+}
+
 export function importSillyTavernFromFile() {
     const input = document.getElementById('stFileInput');
-    if (!input || !input.files?.[0]) return showToast('请选择角色卡 PNG 文件', 'warning');
+    if (!input || !input.files?.[0]) return showToast('请选择 PNG 或 JSON 角色卡文件', 'warning');
     const file = input.files[0];
     
     const reader = new FileReader();
     reader.onload = (e) => {
-        const card = parseSillyTavernCardFromPNG(e.target.result);
+        const card = file.type === 'application/json' || /\.json$/i.test(file.name)
+            ? parseSillyTavernCardFromJSON(new TextDecoder().decode(new Uint8Array(e.target.result)))
+            : parseSillyTavernCardFromPNG(e.target.result);
         if (!card) {
-            showToast('❌ 无法解析该文件，请确认是有效的 SillyTavern 角色卡 PNG', 'error', 5000);
+            showToast('❌ 无法解析该文件，请确认是有效的 SillyTavern PNG/JSON 角色卡', 'error', 5000);
             return;
         }
         
@@ -757,14 +787,8 @@ export function importSillyTavernFromPaste() {
     const html = document.getElementById('stPasteInput')?.value?.trim();
     if (!html) return showToast('请粘贴内容', 'warning');
     
-    // 尝试做为 URL 解码导入
     try {
-        // 如果粘贴的是 base64 编码的 JSON
-        const jsonStr = atob(html);
-        const jsonData = JSON.parse(jsonStr);
-        // ... 解析角色数据 ...
-        // 如果不行，尝试 HTML 解析
-        const card = parseSillyTavernCard(html);
+        const card = parseSillyTavernCardFromJSON(html);
         if (!card) return showToast('无法解析粘贴内容', 'error');
         appState.cards.unshift(card);
         saveLocalData();
@@ -772,7 +796,7 @@ export function importSillyTavernFromPaste() {
         closeModal('sillyTavernImportModal');
         showToast('✅ 成功导入角色卡: ' + card.name, 'success');
     } catch (_) {
-        showToast('粘贴内容格式不支持，请使用 PNG 文件导入', 'warning');
+        showToast('粘贴内容格式不支持，请检查 JSON、Base64 或 HTML 内容', 'warning');
     }
 }
 

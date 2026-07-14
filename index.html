@@ -476,24 +476,26 @@
 
     <!-- ===== SillyTavern 角色卡导入模态框 ===== -->
     <div class="modal-overlay" id="sillyTavernImportModal">
-        <div class="modal-box" style="max-width:600px;">
-            <h3 style="margin-bottom:14px;font-size:1.2rem;font-family:var(--font-serif);">📥 导入 SillyTavern 角色卡</h3>
-            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
-                支持导入 <strong>SillyTavern 标准的角色卡 PNG</strong> 文件（内嵌 JSON 数据的图片格式），
-                自动解析角色名称、描述、人设、开场白等信息，并保留头像图片。
+        <div class="modal-box st-import-modal" style="max-width:760px;">
+            <h3>📥 导入 SillyTavern 角色卡</h3>
+            <p class="st-import-lead">
+                支持 PNG 内嵌角色数据、V1/V2/V3 JSON、Base64 JSON 和 HTML 备用解析。导入后会自动生成可变面板、图鉴和记忆数据库。
             </p>
-            <div style="margin-bottom:20px;border:2px dashed var(--border-color);border-radius:var(--radius-sm);padding:24px;text-align:center;">
-                <div style="font-size:3rem;margin-bottom:12px;">🖼️</div>
-                <label style="display:block;margin-bottom:8px;font-weight:bold;">选择角色卡 PNG 文件</label>
-                <input type="file" id="stFileInput" accept=".png" style="display:block;margin:0 auto 12px;">
-                <button class="action-btn" onclick="importSillyTavernFromFile()" style="width:auto;padding:8px 24px;min-height:40px;margin:0 auto;">🚀 导入角色卡</button>
+            <div class="st-import-grid">
+                <div class="st-import-dropzone">
+                    <div class="st-import-icon">🖼️</div>
+                    <label>选择角色卡 PNG / JSON 文件</label>
+                    <input type="file" id="stFileInput" accept=".png,.json,application/json" style="display:block;margin:0 auto 12px;">
+                    <button class="action-btn" onclick="importSillyTavernFromFile()" style="width:auto;padding:8px 24px;min-height:40px;margin:0 auto;">🚀 导入角色卡</button>
+                </div>
+                <div class="st-import-paste">
+                    <label class="form-label">粘贴 JSON / Base64 / HTML</label>
+                    <textarea id="stPasteInput" class="form-input" rows="8" placeholder="粘贴 SillyTavern JSON、chara Base64 或角色卡 HTML"></textarea>
+                    <button class="action-btn btn-outline" onclick="importSillyTavernFromPaste()">解析粘贴内容</button>
+                </div>
             </div>
-            <div style="margin-bottom:12px;font-size:0.8rem;color:var(--text-muted);background:var(--bg-card);padding:12px;border-radius:4px;line-height:1.6;">
-                <strong>💡 说明：</strong><br>
-                · SillyTavern 角色卡是 <strong>PNG 图片</strong>，点阵图内嵌角色 JSON 数据<br>
-                · 导入后角色头像会保持原图，同时提取名称、人设、开场白、系统提示等<br>
-                · 也支持导入 HTML 格式的角色卡页面（备用方案）<br>
-                · 导入成功后可在卡片库中查看和编辑
+            <div class="st-import-note">
+                <strong>解析内容：</strong>名称、描述、人设、世界观、系统提示、开场白、备用开场白、标签、creator notes、示例对话、character_book 世界书与扩展字段。
             </div>
             <button class="action-btn btn-outline" onclick="closeModal('sillyTavernImportModal')">关闭</button>
         </div>

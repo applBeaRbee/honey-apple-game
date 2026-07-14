@@ -378,3 +378,200 @@ function pickColor(index) {
 function escapeRegExp(value) {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+// ================= SillyTavern 卡片规范化层 =================
+// 解析入口只负责识别载体，后续统一走这里，避免 PNG/JSON 两套字段逻辑逐渐分叉。
+export function parseSillyTavernCharacterCard(input, options = {}) {
+    const raw = readCardPayload(input);
+    if (!raw) return null;
+
+    const normalized = normalizeSillyTavernCard(raw);
+    if (!normalized?.data?.name && !normalized?.data?.description && !normalized?.data?.first_mes) return null;
+
+    const data = normalized.data;
+    const book = normalized.characterBook;
+    const card = {
+        id: generateBrowserId('card'),
+        created: Date.now(),
+        avatar: options.avatar || '🖼️',
+        avatarDataUrl: options.avatar || null,
+        name: data.name || '未命名角色',
+        description: compactText(data.description || data.personality || '一张 SillyTavern 角色卡').substring(0, 180),
+        worldSetting: firstValue(data.extensions?.world, data.scenario, findBookText(book, /world|世界观|学校|school/i), '奇幻冒险世界'),
+        storyBackground: firstValue(data.scenario, data.description, findBookText(book, /world|世界观|学校|school/i), '一段新的冒险...'),
+        defaultCharName: firstValue(data.your_name, data.player_name, data.user_name, ''),
+        defaultCharInfo: cleanImportedText(data.personality || data.description || ''),
+        systemPrompt: [
+            data.system_prompt,
+            data.creator_notes,
+            data.instructions,
+            data.post_history_instructions,
+            data.extensions?.depth_prompt?.prompt
+        ].filter(Boolean).map(cleanImportedText).filter(Boolean).join('\n\n') || '你是硬核DM。',
+        openingText: pickOpening(data),
+        alternateGreetings: Array.isArray(data.alternate_greetings) ? data.alternate_greetings.map(cleanImportedText).filter(Boolean) : [],
+        exampleMessages: cleanImportedText(data.mes_example || data.example_dialogue || ''),
+        creator: data.creator || normalized.creator || '',
+        creatorNotes: cleanImportedText(data.creator_notes || ''),
+        tags: normalizeTags(data.tags),
+        spec: normalized.spec,
+        specVersion: normalized.specVersion,
+        extensions: cloneJson(data.extensions || {}),
+        rawCardData: cloneJson(raw),
+        characterBookData: book,
+        lorebook: {},
+        panelTemplate: '{}'
+    };
+
+    const tagLore = Object.fromEntries(card.tags.map(tag => [tag, '角色标签']));
+    card.lorebook = buildLorebookFromCharacterBook(book, tagLore);
+
+    let panels;
+    if (book?.entries?.length) panels = buildPanelsFromCharacterBook({ ...data, character_book: book }, card);
+    if (!panels) {
+        panels = {
+            '人物核心': { '姓名': card.name || '{charName}', '状态': '正常' },
+            '角色设定': card.defaultCharInfo ? [card.defaultCharInfo.substring(0, 1200)] : [],
+            '随身物品': []
+        };
+    }
+    card.panelTemplate = JSON.stringify(panels, null, 2);
+    return card;
+}
+
+export function normalizeSillyTavernCard(input) {
+    const root = isObject(input) ? input : {};
+    const data = isObject(root.data) ? root.data : root;
+    const nested = isObject(data.data) ? data.data : data;
+    const merged = { ...data, ...nested };
+    const book = normalizeRawCharacterBook(merged.character_book || merged.characterBook || merged.extensions?.world_info || root.character_book);
+    return {
+        data: merged,
+        characterBook: book,
+        spec: root.spec || merged.spec || (root.data ? 'chara_card_v2' : 'unknown'),
+        specVersion: root.spec_version || merged.spec_version || root.specVersion || '',
+        creator: root.creator || merged.creator || ''
+    };
+}
+
+function readCardPayload(input) {
+    if (isObject(input)) return input;
+    if (typeof input !== 'string') {
+        if (input instanceof ArrayBuffer || ArrayBuffer.isView(input)) return readPngCardPayload(input);
+        return null;
+    }
+    const text = input.trim();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch (_) {}
+    try {
+        const decoded = decodeBase64Json(text);
+        if (decoded) return decoded;
+    } catch (_) {}
+    return null;
+}
+
+function readPngCardPayload(input) {
+    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input.buffer || input);
+    if (!isPng(bytes)) return null;
+    const chunks = extractPngTextChunks(bytes);
+    for (const keyword of ['ccv3', 'ccv2', 'chara', 'ccv1']) {
+        if (chunks[keyword]) {
+            const decoded = decodeBase64Json(chunks[keyword]);
+            if (decoded) return decoded;
+        }
+    }
+    return null;
+}
+
+function extractPngTextChunks(bytes) {
+    const chunks = {};
+    let offset = 8;
+    while (offset + 12 <= bytes.length) {
+        const length = readUint32(bytes, offset);
+        const type = ascii(bytes, offset + 4, 4);
+        const start = offset + 8;
+        const end = start + length;
+        if (end + 4 > bytes.length) break;
+        const payload = bytes.slice(start, end);
+        if (type === 'tEXt') {
+            const split = payload.indexOf(0);
+            if (split > 0) chunks[ascii(payload, 0, split)] = new TextDecoder().decode(payload.slice(split + 1)).trim();
+        } else if (type === 'iTXt') {
+            const keywordEnd = payload.indexOf(0);
+            if (keywordEnd > 0) {
+                let cursor = keywordEnd + 1;
+                const compressionFlag = payload[cursor++];
+                cursor++;
+                const languageEnd = payload.indexOf(0, cursor);
+                cursor = languageEnd + 1;
+                const translatedEnd = payload.indexOf(0, cursor);
+                cursor = translatedEnd + 1;
+                if (compressionFlag === 0) chunks[ascii(payload, 0, keywordEnd)] = new TextDecoder().decode(payload.slice(cursor)).trim();
+            }
+        }
+        offset = end + 4;
+        if (type === 'IEND') break;
+    }
+    return chunks;
+}
+
+function normalizeRawCharacterBook(book) {
+    if (!isObject(book)) return { entries: [] };
+    const entries = Array.isArray(book.entries) ? book.entries : Array.isArray(book.keys) ? book.keys : [];
+    return {
+        ...cloneJson(book),
+        entries: entries.map((entry, index) => ({
+            ...cloneJson(entry),
+            comment: entry.comment || entry.name || entry.title || entry.keys?.[0] || `条目${index + 1}`,
+            keys: Array.isArray(entry.keys) ? entry.keys : [],
+            content: typeof entry.content === 'string' ? entry.content : String(entry.content || ''),
+            enabled: entry.enabled !== false,
+            insertion_order: Number(entry.insertion_order ?? entry.order ?? index)
+        }))
+    };
+}
+
+function decodeBase64Json(value) {
+    const normalized = String(value || '').replace(/^data:[^,]+,/, '').replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    if (!normalized) return null;
+    const binary = typeof atob === 'function'
+        ? atob(normalized)
+        : typeof Buffer !== 'undefined'
+            ? Buffer.from(normalized, 'base64').toString('binary')
+            : null;
+    if (!binary) return null;
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    try { return JSON.parse(text); } catch (_) {
+        try { return JSON.parse(decodeURIComponent(escape(binary))); } catch (__) { return null; }
+    }
+}
+
+function pickOpening(data) {
+    const candidates = [data.first_mes, data.greeting, ...(Array.isArray(data.alternate_greetings) ? data.alternate_greetings : [])];
+    return candidates.map(cleanImportedText).find(Boolean) || '故事开始了...';
+}
+
+function findBookText(book, pattern) {
+    const entry = (book?.entries || []).find(item => pattern.test(`${item.comment || ''} ${item.content || ''}`) && item.content);
+    return entry ? compactText(entry.content).substring(0, 600) : '';
+}
+
+function cleanImportedText(value) {
+    return String(value || '')
+        .replace(/<StatusPlaceHolderImpl\/>/g, '')
+        .replace(/<UpdateVariable[^>]*>[\s\S]*?<\/UpdateVariable>/gi, '')
+        .replace(/<Analysis>[\s\S]*?<\/Analysis>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\r\n/g, '\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function compactText(value) { return cleanImportedText(value).replace(/\s+/g, ' ').trim(); }
+function firstValue(...values) { return values.find(value => value !== undefined && value !== null && String(value).trim()) || ''; }
+function normalizeTags(tags) { return Array.isArray(tags) ? tags.map(tag => String(tag).trim()).filter(Boolean).slice(0, 80) : []; }
+function cloneJson(value) { try { return JSON.parse(JSON.stringify(value)); } catch (_) { return {}; } }
+function isObject(value) { return value && typeof value === 'object' && !Array.isArray(value); }
+function isPng(bytes) { return bytes?.length >= 8 && [137,80,78,71,13,10,26,10].every((v, i) => bytes[i] === v); }
+function readUint32(bytes, offset) { return ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3]; }
+function ascii(bytes, start, length) { return String.fromCharCode(...bytes.slice(start, start + length)); }
+function generateBrowserId(prefix) { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
