@@ -428,3 +428,192 @@ html.theme-cyber .form-textarea {
         color: var(--theme-ink) !important;
     }
 }
+
+/* Mobile viewport repair: keep the chat composer inside the visible game area. */
+@media (max-width: 850px) {
+    html,
+    body {
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
+    }
+
+    .mobile-header {
+        flex: 0 0 calc(50px + env(safe-area-inset-top));
+        height: calc(50px + env(safe-area-inset-top)) !important;
+        padding-top: env(safe-area-inset-top);
+        position: relative;
+        top: auto;
+    }
+
+    .app-wrapper {
+        flex: 1 1 0;
+        height: calc(100dvh - 50px - env(safe-area-inset-top));
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .main-wrapper,
+    #gameView {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #gameView {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .game-top-bar,
+    #mobileGameNav,
+    .action-bar,
+    .quick-action-bar,
+    .chat-input-area {
+        flex: 0 0 auto;
+    }
+
+    .game-top-bar {
+        max-height: 104px;
+        overflow: hidden;
+    }
+
+    .game-main-area,
+    .game-main-area.show-chat,
+    .game-main-area.show-panel {
+        flex: 1 1 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: hidden;
+    }
+
+    .game-main-area.show-chat .chat-area {
+        display: flex !important;
+        flex: 1 1 0 !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: hidden;
+    }
+
+    .chat-history {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+    }
+
+    .chat-input-area {
+        position: sticky;
+        bottom: 0;
+        z-index: 35;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+        border-top: 1px solid var(--ui-line, var(--border-color));
+        box-shadow: 0 -8px 20px rgba(31,24,18,0.08);
+    }
+
+    #mobileGameNav {
+        position: relative;
+        z-index: 36;
+    }
+
+    .global-sidebar {
+        width: min(92vw, 360px) !important;
+        left: -92vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        overflow: hidden;
+    }
+
+    .global-sidebar.open {
+        left: 0 !important;
+    }
+
+    .sidebar-context {
+        padding: 10px !important;
+        margin-bottom: 10px;
+    }
+
+    .session-zone {
+        flex: 1 1 auto !important;
+        min-height: min(56dvh, 540px) !important;
+        padding: 14px !important;
+    }
+
+    .session-search {
+        min-height: 42px;
+        margin-bottom: 12px;
+    }
+
+    .session-list {
+        flex: 1 1 auto !important;
+        min-height: 0;
+        padding: 2px 4px 18px 0 !important;
+        gap: 10px !important;
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .session-item {
+        min-height: 72px;
+        grid-template-columns: 48px minmax(0, 1fr) !important;
+        gap: 10px !important;
+        padding: 12px 42px 12px 12px !important;
+        border-radius: 14px !important;
+    }
+
+    .session-item-avatar {
+        width: 48px !important;
+        height: 48px !important;
+    }
+
+    .session-item-name {
+        font-size: 0.9rem !important;
+        line-height: 1.35;
+    }
+
+    .session-item-card,
+    .session-item-meta {
+        font-size: 0.72rem !important;
+    }
+
+    .session-del-btn {
+        width: 34px !important;
+        height: 34px !important;
+        right: 7px !important;
+        top: 50% !important;
+        transform: translateY(-50%);
+    }
+}
+
+@media (max-width: 480px) {
+    .mobile-header {
+        flex-basis: calc(44px + env(safe-area-inset-top));
+        height: calc(44px + env(safe-area-inset-top)) !important;
+    }
+
+    .app-wrapper {
+        height: calc(100dvh - 44px - env(safe-area-inset-top));
+    }
+
+    .global-sidebar {
+        width: 94vw !important;
+        left: -94vw !important;
+    }
+
+    .global-sidebar.open {
+        left: 0 !important;
+    }
+
+    .session-zone {
+        min-height: 60dvh !important;
+    }
+
+    .game-top-bar {
+        max-height: 92px;
+    }
+
+    .chat-input-area {
+        padding-bottom: calc(7px + env(safe-area-inset-bottom)) !important;
+    }
+}
