@@ -1,0 +1,430 @@
+/* =====================================================================
+   Full-site theme layer inspired by ACU visualizer theme variables.
+   Loaded last: maps theme classes to the whole Honey Apple layout.
+   ===================================================================== */
+
+html.theme-default,
+html:not([class*="theme-"]) {
+    --theme-page: #f4f1ec;
+    --theme-page-2: #faf8f4;
+    --theme-surface: rgba(255, 255, 252, 0.88);
+    --theme-surface-solid: #fffdfa;
+    --theme-muted: #f0e9df;
+    --theme-sidebar: #171311;
+    --theme-sidebar-2: #221b18;
+    --theme-ink: #24201c;
+    --theme-ink-2: #514940;
+    --theme-ink-3: #80766c;
+    --theme-line: rgba(88, 70, 55, 0.16);
+    --theme-line-strong: rgba(88, 70, 55, 0.28);
+    --theme-accent: #b74d32;
+    --theme-accent-2: #8b5d3c;
+    --theme-soft: rgba(183, 77, 50, 0.11);
+    --theme-focus: rgba(183, 77, 50, 0.18);
+    --theme-shadow: 0 1px 2px rgba(31, 24, 18, 0.04), 0 8px 22px rgba(31, 24, 18, 0.06);
+    --theme-shadow-strong: 0 8px 30px rgba(31, 24, 18, 0.10), 0 22px 60px rgba(31, 24, 18, 0.10);
+    --theme-body-bg:
+        linear-gradient(180deg, rgba(255,255,255,0.68), rgba(255,255,255,0.10) 42%, rgba(255,255,255,0)),
+        radial-gradient(980px 560px at 28% -10%, rgba(183,77,50,0.10), transparent 60%),
+        radial-gradient(900px 520px at 100% 100%, rgba(73,111,135,0.10), transparent 56%),
+        var(--theme-page);
+}
+
+html.theme-sakura {
+    --theme-page: #fff6fb;
+    --theme-page-2: #fffafd;
+    --theme-surface: rgba(255, 250, 253, 0.84);
+    --theme-surface-solid: #fffafd;
+    --theme-muted: #f8e5ef;
+    --theme-sidebar: #3a1d2d;
+    --theme-sidebar-2: #5b2948;
+    --theme-ink: #3b2532;
+    --theme-ink-2: #775066;
+    --theme-ink-3: #a77f93;
+    --theme-line: rgba(176, 91, 132, 0.18);
+    --theme-line-strong: rgba(176, 91, 132, 0.34);
+    --theme-accent: #df6f9f;
+    --theme-accent-2: #9b6ad5;
+    --theme-soft: rgba(223, 111, 159, 0.15);
+    --theme-focus: rgba(223, 111, 159, 0.22);
+    --theme-shadow: 0 1px 2px rgba(92, 41, 72, 0.05), 0 10px 28px rgba(176, 91, 132, 0.10);
+    --theme-shadow-strong: 0 14px 38px rgba(176, 91, 132, 0.16), 0 24px 70px rgba(155, 106, 213, 0.10);
+    --theme-body-bg:
+        linear-gradient(135deg, rgba(255,255,255,0.74), rgba(255,232,243,0.50) 38%, rgba(245,232,255,0.36)),
+        radial-gradient(900px 520px at 18% -10%, rgba(255,183,213,0.42), transparent 62%),
+        radial-gradient(780px 480px at 100% 12%, rgba(179,137,238,0.26), transparent 58%),
+        radial-gradient(760px 520px at 76% 100%, rgba(255,211,228,0.34), transparent 56%),
+        var(--theme-page);
+}
+
+html.theme-aurora {
+    --theme-page: #0f172a;
+    --theme-page-2: #172033;
+    --theme-surface: rgba(20, 30, 49, 0.78);
+    --theme-surface-solid: #172033;
+    --theme-muted: #1d2a42;
+    --theme-sidebar: #08111f;
+    --theme-sidebar-2: #102034;
+    --theme-ink: #e6edf7;
+    --theme-ink-2: #c1cad8;
+    --theme-ink-3: #8fa2b7;
+    --theme-line: rgba(119, 201, 216, 0.20);
+    --theme-line-strong: rgba(119, 201, 216, 0.36);
+    --theme-accent: #73d7e7;
+    --theme-accent-2: #b280f4;
+    --theme-soft: rgba(115, 215, 231, 0.13);
+    --theme-focus: rgba(178, 128, 244, 0.20);
+    --theme-shadow: 0 10px 30px rgba(0,0,0,0.24);
+    --theme-shadow-strong: 0 16px 48px rgba(0,0,0,0.38), 0 0 40px rgba(115,215,231,0.08);
+    --theme-body-bg:
+        radial-gradient(900px 520px at 30% -10%, rgba(115,215,231,0.22), transparent 62%),
+        radial-gradient(780px 520px at 100% 14%, rgba(178,128,244,0.22), transparent 60%),
+        linear-gradient(135deg, #0f172a, #18233a 58%, #101827);
+}
+
+html.theme-modern {
+    --theme-page: #f4f7fa;
+    --theme-page-2: #ffffff;
+    --theme-surface: rgba(255,255,255,0.88);
+    --theme-surface-solid: #ffffff;
+    --theme-muted: #eef2f6;
+    --theme-sidebar: #17202a;
+    --theme-sidebar-2: #243241;
+    --theme-ink: #1f2933;
+    --theme-ink-2: #52616f;
+    --theme-ink-3: #7f8d9b;
+    --theme-line: rgba(82, 97, 111, 0.18);
+    --theme-line-strong: rgba(82, 97, 111, 0.32);
+    --theme-accent: #49708b;
+    --theme-accent-2: #6d8496;
+    --theme-soft: rgba(73,112,139,0.12);
+    --theme-focus: rgba(73,112,139,0.20);
+    --theme-body-bg:
+        linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.2)),
+        radial-gradient(880px 500px at 86% -8%, rgba(73,112,139,0.13), transparent 58%),
+        #f4f7fa;
+}
+
+html.theme-dark {
+    --theme-page: #151312;
+    --theme-page-2: #1d1917;
+    --theme-surface: rgba(31, 27, 25, 0.84);
+    --theme-surface-solid: #1f1b19;
+    --theme-muted: #29231f;
+    --theme-sidebar: #0e0c0b;
+    --theme-sidebar-2: #1b1614;
+    --theme-ink: #f0e8df;
+    --theme-ink-2: #c9bdb2;
+    --theme-ink-3: #93867b;
+    --theme-line: rgba(240, 232, 223, 0.13);
+    --theme-line-strong: rgba(240, 232, 223, 0.24);
+    --theme-accent: #db6b49;
+    --theme-accent-2: #b68b62;
+    --theme-soft: rgba(219,107,73,0.14);
+    --theme-focus: rgba(219,107,73,0.22);
+    --theme-shadow: 0 10px 34px rgba(0,0,0,0.30);
+    --theme-shadow-strong: 0 18px 60px rgba(0,0,0,0.46);
+    --theme-body-bg:
+        radial-gradient(900px 520px at 40% -12%, rgba(219,107,73,0.12), transparent 60%),
+        #151312;
+}
+
+html.theme-forest {
+    --theme-page: #f3f9ef;
+    --theme-page-2: #fbfff8;
+    --theme-surface: rgba(253,255,250,0.86);
+    --theme-surface-solid: #fdfffa;
+    --theme-muted: #e6f0df;
+    --theme-sidebar: #172416;
+    --theme-sidebar-2: #263a22;
+    --theme-ink: #20311e;
+    --theme-ink-2: #52674b;
+    --theme-ink-3: #7e9278;
+    --theme-line: rgba(83, 118, 69, 0.18);
+    --theme-line-strong: rgba(83, 118, 69, 0.32);
+    --theme-accent: #668f4e;
+    --theme-accent-2: #b4844f;
+    --theme-soft: rgba(102,143,78,0.13);
+    --theme-focus: rgba(102,143,78,0.20);
+    --theme-body-bg:
+        radial-gradient(860px 520px at 20% -10%, rgba(102,143,78,0.16), transparent 62%),
+        radial-gradient(760px 520px at 100% 100%, rgba(180,132,79,0.10), transparent 58%),
+        #f3f9ef;
+}
+
+html.theme-ocean {
+    --theme-page: #f0fbff;
+    --theme-page-2: #fbfeff;
+    --theme-surface: rgba(251,254,255,0.86);
+    --theme-surface-solid: #fbfeff;
+    --theme-muted: #def1f6;
+    --theme-sidebar: #0d2630;
+    --theme-sidebar-2: #173d4b;
+    --theme-ink: #16303a;
+    --theme-ink-2: #436b78;
+    --theme-ink-3: #7196a1;
+    --theme-line: rgba(45, 127, 157, 0.18);
+    --theme-line-strong: rgba(45, 127, 157, 0.34);
+    --theme-accent: #2d7f9d;
+    --theme-accent-2: #3aa6a4;
+    --theme-soft: rgba(45,127,157,0.13);
+    --theme-focus: rgba(45,127,157,0.20);
+    --theme-body-bg:
+        radial-gradient(860px 520px at 80% -10%, rgba(45,127,157,0.18), transparent 62%),
+        radial-gradient(820px 520px at 0% 100%, rgba(58,166,164,0.12), transparent 58%),
+        #f0fbff;
+}
+
+html.theme-sunset {
+    --theme-page: #fff8ec;
+    --theme-page-2: #fffdf8;
+    --theme-surface: rgba(255,253,248,0.86);
+    --theme-surface-solid: #fffdf8;
+    --theme-muted: #f8e5cf;
+    --theme-sidebar: #3b2117;
+    --theme-sidebar-2: #5d3423;
+    --theme-ink: #3c2a20;
+    --theme-ink-2: #775845;
+    --theme-ink-3: #a4826d;
+    --theme-line: rgba(219, 126, 72, 0.20);
+    --theme-line-strong: rgba(219, 126, 72, 0.36);
+    --theme-accent: #db7e48;
+    --theme-accent-2: #e48ca8;
+    --theme-soft: rgba(219,126,72,0.14);
+    --theme-focus: rgba(228,140,168,0.20);
+    --theme-body-bg:
+        radial-gradient(900px 540px at 26% -12%, rgba(255,196,121,0.28), transparent 62%),
+        radial-gradient(760px 480px at 100% 18%, rgba(228,140,168,0.20), transparent 58%),
+        #fff8ec;
+}
+
+html.theme-starship,
+html.theme-cyber {
+    --theme-page: #111436;
+    --theme-page-2: #1a2050;
+    --theme-surface: rgba(23, 28, 72, 0.80);
+    --theme-surface-solid: #171c48;
+    --theme-muted: #222a62;
+    --theme-sidebar: #090d24;
+    --theme-sidebar-2: #151a43;
+    --theme-ink: #e7ecff;
+    --theme-ink-2: #bec8f7;
+    --theme-ink-3: #8e9adc;
+    --theme-line: rgba(148, 163, 255, 0.20);
+    --theme-line-strong: rgba(148, 163, 255, 0.36);
+    --theme-accent: #7e8cff;
+    --theme-accent-2: #25d7d5;
+    --theme-soft: rgba(126,140,255,0.14);
+    --theme-focus: rgba(37,215,213,0.20);
+    --theme-shadow: 0 12px 36px rgba(0,0,0,0.28);
+    --theme-shadow-strong: 0 18px 62px rgba(0,0,0,0.45), 0 0 36px rgba(37,215,213,0.08);
+    --theme-body-bg:
+        radial-gradient(900px 520px at 36% -12%, rgba(126,140,255,0.22), transparent 62%),
+        radial-gradient(780px 520px at 100% 12%, rgba(37,215,213,0.15), transparent 58%),
+        linear-gradient(135deg, #111436, #1a2050 55%, #10142f);
+}
+
+html.theme-retro {
+    --theme-page: #eee3cf;
+    --theme-page-2: #f8f1e4;
+    --theme-surface: rgba(255, 250, 240, 0.86);
+    --theme-surface-solid: #fff7e8;
+    --theme-muted: #ded0b8;
+    --theme-sidebar: #2b2118;
+    --theme-sidebar-2: #3f3021;
+    --theme-ink: #35281d;
+    --theme-ink-2: #67513d;
+    --theme-ink-3: #927a61;
+    --theme-line: rgba(115, 89, 63, 0.20);
+    --theme-line-strong: rgba(115, 89, 63, 0.36);
+    --theme-accent: #9b6a3d;
+    --theme-accent-2: #6f7d51;
+    --theme-soft: rgba(155,106,61,0.14);
+    --theme-focus: rgba(155,106,61,0.22);
+    --theme-body-bg:
+        radial-gradient(900px 520px at 28% -12%, rgba(155,106,61,0.14), transparent 62%),
+        #eee3cf;
+}
+
+/* Map theme variables back to the app design tokens. */
+html[class*="theme-"] {
+    --ui-bg: var(--theme-page);
+    --ui-bg-soft: var(--theme-page-2);
+    --ui-surface: var(--theme-surface);
+    --ui-surface-solid: var(--theme-surface-solid);
+    --ui-surface-muted: var(--theme-muted);
+    --ui-sidebar: var(--theme-sidebar);
+    --ui-sidebar-2: var(--theme-sidebar-2);
+    --ui-ink: var(--theme-ink);
+    --ui-ink-2: var(--theme-ink-2);
+    --ui-ink-3: var(--theme-ink-3);
+    --ui-line: var(--theme-line);
+    --ui-line-strong: var(--theme-line-strong);
+    --ui-accent: var(--theme-accent);
+    --ui-accent-2: var(--theme-accent-2);
+    --ui-accent-soft: var(--theme-soft);
+    --ui-shadow-1: var(--theme-shadow);
+    --ui-shadow-2: var(--theme-shadow-strong);
+    --bg-main: var(--theme-page);
+    --bg-panel: var(--theme-surface-solid);
+    --bg-card: var(--theme-muted);
+    --bg-sidebar: var(--theme-sidebar);
+    --text-main: var(--theme-ink);
+    --text-sub: var(--theme-ink-2);
+    --text-muted: var(--theme-ink-3);
+    --color-primary: var(--theme-accent);
+    --color-primary-hover: color-mix(in srgb, var(--theme-accent) 82%, #000);
+    --border-color: var(--theme-line);
+    --border-color-strong: var(--theme-line-strong);
+    --shadow-sm: var(--theme-shadow);
+    --shadow-md: var(--theme-shadow);
+    --shadow-lg: var(--theme-shadow-strong);
+}
+
+html[class*="theme-"] body {
+    background: var(--theme-body-bg);
+    color: var(--theme-ink);
+}
+
+html[class*="theme-"] .global-sidebar {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0)),
+        linear-gradient(135deg, var(--theme-sidebar), var(--theme-sidebar-2));
+}
+
+html[class*="theme-"] .logo-icon,
+html[class*="theme-"] .nav-btn.primary,
+html[class*="theme-"] #btnSend,
+html[class*="theme-"] .action-btn:not(.btn-outline) {
+    background: linear-gradient(135deg, var(--theme-accent), var(--theme-accent-2)) !important;
+}
+
+html[class*="theme-"] .top-btn.accent,
+html[class*="theme-"] .top-btn.import-diary,
+html[class*="theme-"] .top-btn.edit-session-card,
+html[class*="theme-"] .panel-tab-btn.active,
+html[class*="theme-"] .value-chip,
+html[class*="theme-"] .memory-chip {
+    background: var(--theme-soft) !important;
+    color: var(--theme-accent) !important;
+    border-color: var(--theme-line-strong) !important;
+}
+
+html[class*="theme-"] .script-card,
+html[class*="theme-"] .chat-area,
+html[class*="theme-"] .panel-content-area,
+html[class*="theme-"] .game-sidebar,
+html[class*="theme-"] .modal-box,
+html[class*="theme-"] .panel-card,
+html[class*="theme-"] .fusion-line,
+html[class*="theme-"] .director-card-ui,
+html[class*="theme-"] .codex-library,
+html[class*="theme-"] .upload-entry {
+    background: var(--theme-surface);
+    border-color: var(--theme-line);
+    box-shadow: var(--theme-shadow);
+}
+
+html.theme-aurora .chat-message,
+html.theme-dark .chat-message,
+html.theme-starship .chat-message,
+html.theme-cyber .chat-message {
+    background: rgba(255,255,255,0.055);
+    color: var(--theme-ink-2);
+}
+
+html.theme-aurora .msg-user,
+html.theme-dark .msg-user,
+html.theme-starship .msg-user,
+html.theme-cyber .msg-user {
+    background: var(--theme-soft);
+    color: var(--theme-ink);
+}
+
+html.theme-aurora .top-btn,
+html.theme-dark .top-btn,
+html.theme-starship .top-btn,
+html.theme-cyber .top-btn,
+html.theme-aurora .form-input,
+html.theme-dark .form-input,
+html.theme-starship .form-input,
+html.theme-cyber .form-input,
+html.theme-aurora .form-textarea,
+html.theme-dark .form-textarea,
+html.theme-starship .form-textarea,
+html.theme-cyber .form-textarea {
+    background: rgba(255,255,255,0.07) !important;
+    color: var(--theme-ink) !important;
+}
+
+/* Theme chooser redesign */
+#themeGrid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: 12px !important;
+}
+
+.theme-item {
+    min-height: 138px;
+    padding: 10px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--theme-line, var(--ui-line)) !important;
+    background: var(--theme-surface, var(--ui-surface)) !important;
+    box-shadow: var(--theme-shadow, var(--ui-shadow-1));
+}
+
+.theme-item:hover {
+    transform: translateY(-2px) !important;
+    border-color: var(--theme-line-strong, var(--ui-line-strong)) !important;
+}
+
+.theme-item.active {
+    border-color: var(--theme-accent, var(--ui-accent)) !important;
+    box-shadow: 0 0 0 3px var(--theme-focus, rgba(183,77,50,0.18)), var(--theme-shadow, var(--ui-shadow-1)) !important;
+}
+
+.theme-preview {
+    height: 58px !important;
+    border-radius: 9px !important;
+    margin-bottom: 9px !important;
+    border: 1px solid rgba(255,255,255,0.42);
+}
+
+.theme-name {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    color: var(--theme-ink, var(--ui-ink)) !important;
+    font: 900 0.82rem/1.3 var(--font-main) !important;
+}
+
+.theme-desc {
+    margin-top: 5px;
+    color: var(--theme-ink-3, var(--ui-ink-3));
+    font-size: 0.68rem;
+    line-height: 1.45;
+}
+
+/* Layout refinement: cleaner dashboard proportions. */
+@media (min-width: 1080px) {
+    .game-main-area {
+        grid-template-columns: 112px minmax(520px, 1.45fr) minmax(360px, 1fr);
+    }
+
+    .chat-area {
+        flex: 1.55;
+    }
+
+    .panel-content-area {
+        flex: 1;
+    }
+}
+
+@media (max-width: 850px) {
+    html[class*="theme-"] .mobile-header,
+    html[class*="theme-"] #mobileGameNav,
+    html[class*="theme-"] .game-top-bar,
+    html[class*="theme-"] .chat-input-area {
+        background: color-mix(in srgb, var(--theme-surface-solid) 88%, transparent) !important;
+        color: var(--theme-ink) !important;
+    }
+}
