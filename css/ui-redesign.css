@@ -1749,13 +1749,40 @@ select.form-input {
     }
 
     #mobileGameNav {
-        flex: 0 0 auto;
+        order: 2;
+        flex: 0 0 46px;
         display: flex !important;
         min-height: 46px;
-        padding-bottom: env(safe-area-inset-bottom);
+        height: 46px;
+        padding: 4px 8px;
+        gap: 6px;
+        background: rgba(255,253,250,0.96);
+        border-top: 0;
+        border-bottom: 1px solid var(--ui-line);
+        box-shadow: 0 4px 14px rgba(31,24,18,0.08);
+    }
+
+    #mobileGameNav button {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 36px;
+        height: 36px;
+        border: 1px solid var(--ui-line);
+        border-radius: 10px;
+        background: rgba(255,255,255,0.62);
+        color: var(--ui-ink-3);
+        font: 800 0.78rem/1 var(--font-main);
+    }
+
+    #mobileGameNav button.active {
+        color: var(--ui-accent);
+        background: var(--ui-accent-soft);
+        border-color: rgba(183,77,50,0.28);
+        border-bottom-color: rgba(183,77,50,0.28);
     }
 
     .game-main-area.show-panel {
+        order: 3;
         display: flex !important;
         flex-direction: column;
         flex: 1 1 0;
@@ -1799,6 +1826,12 @@ select.form-input {
     .game-main-area.show-chat .panel-content-area,
     .game-main-area.show-panel .chat-area {
         display: none !important;
+    }
+
+    .game-main-area.show-chat {
+        order: 3;
+        flex: 1 1 0;
+        min-height: 0;
     }
 }
 

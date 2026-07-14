@@ -9,7 +9,7 @@ import { renderSidebarSessions } from './sessions.js';
 // ===== 预设 API 配置数据库 =====
 export const API_PRESETS_LIST = [
     { name: '🔮 DeepSeek 官方', url: 'https://api.deepseek.com/chat/completions', model: 'deepseek-chat', note: 'DeepSeek 官方 API' },
-    { name: '🧠 OpenCode Zen', url: 'https://opencode.ai/zen/v1/chat/completions', model: 'deepseek-v4-flash', note: '需开启 CORS 代理（不支持浏览器直连）' },
+    { name: '🧠 OpenCode Zen', url: 'https://opencode.ai/zen/v1/chat/completions', model: 'mimo-v2.5-free', note: '浏览器直连失败时会自动尝试 CORS 代理' },
     { name: '🌊 轨迹流动', url: 'https://guiji.ai/v1/chat/completions', model: 'deepseek-chat', note: '轨迹流动 API' },
     { name: '🔄 OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', model: 'openrouter/auto', note: '多模型路由' },
     { name: '🔌 SiliconFlow', url: 'https://api.siliconflow.cn/v1/chat/completions', model: 'deepseek-v3', note: '硅基流动' },
@@ -23,6 +23,7 @@ function normalizeStandardApiUrl(url) {
     if (/\/chat\/completions$/i.test(clean)) return clean;
     if (/\/v\d+$/i.test(clean)) return clean + '/chat/completions';
     if (/opencode\.ai\/zen$/i.test(clean)) return clean + '/v1/chat/completions';
+    if (/opencode\.ai\/zen\/v1$/i.test(clean)) return clean + '/chat/completions';
     return clean;
 }
 
@@ -32,6 +33,76 @@ function resolveStandardApiUrl(url, useProxy = false, proxyUrl = '') {
     const proxy = (proxyUrl || 'https://corsproxy.io/?').trim();
     if (!proxy || normalized.startsWith(proxy)) return normalized;
     return proxy + encodeURIComponent(normalized);
+}
+
+function isOpenCodeApiUrl(url) {
+    return /opencode\.ai\/zen/i.test(url || '');
+}
+
+function isOpenCodeRoute(url, model = '') {
+    return isOpenCodeApiUrl(url)
+        || /honey-apple-ai-proxy|workers\.dev/i.test(url || '')
+        || /mimo-v2\.5-free/i.test(model || '');
+}
+
+function getOpenCodeCooldownRemaining() {
+    const until = Number(appState.settings.openCodeCooldownUntil || 0);
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+function setOpenCodeCooldown(retryAfter) {
+    const seconds = Math.max(30, Number.parseInt(retryAfter, 10) || 90);
+    appState.settings.openCodeCooldownUntil = Date.now() + seconds * 1000;
+    saveLocalData();
+    return seconds;
+}
+
+function isNetworkOrCorsError(error) {
+    const msg = error?.message || String(error || '');
+    return error?.name === 'TypeError'
+        || msg.includes('Failed to fetch')
+        || msg.includes('NetworkError')
+        || msg.includes('Load failed')
+        || msg.includes('CORS');
+}
+
+function extractStandardResponseText(data) {
+    const choice = data?.choices?.[0];
+    const message = choice?.message || {};
+    const parts = [];
+    if (typeof message.content === 'string' && message.content.trim()) parts.push(message.content);
+    if (typeof message.reasoning === 'string' && message.reasoning.trim()) parts.push(message.reasoning);
+    if (Array.isArray(message.reasoning_details)) {
+        message.reasoning_details.forEach(item => {
+            if (typeof item?.text === 'string' && item.text.trim()) parts.push(item.text);
+        });
+    }
+    if (typeof choice?.text === 'string' && choice.text.trim()) parts.push(choice.text);
+    return parts.join('\n').trim();
+}
+
+function isUsableStandardResponse(data) {
+    const choice = data?.choices?.[0];
+    return Boolean(choice?.message || choice?.text !== undefined || extractStandardResponseText(data));
+}
+
+async function postStandardApiForTest(apiUrl, apiKey, model, useProxy, proxyUrl, signal) {
+    const res = await fetch(resolveStandardApiUrl(apiUrl, useProxy, proxyUrl), {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey
+        },
+        body: JSON.stringify({
+            model: model || 'gpt-3.5-turbo',
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 8
+        }),
+        signal
+    });
+    let data;
+    try { data = await res.json(); } catch (_) { data = {}; }
+    return { res, data, usedProxy: useProxy };
 }
 
 // ===== 导出 =====
@@ -352,6 +423,10 @@ export async function testStandardApi() {
     const model = document.getElementById('cfgModel').value.trim();
     if (!apiKey) return showToast('请先填写 API Key', 'warning');
     if (!apiUrl) return showToast('请先填写 API 地址', 'warning');
+    if (isOpenCodeRoute(apiUrl, model)) {
+        const left = getOpenCodeCooldownRemaining();
+        if (left > 0) return showToast(`OpenCode 正在限流冷却中，请约 ${left} 秒后再测试。`, 'warning', 6000);
+    }
 
     const btn = document.querySelector('#standardApiConfig .action-btn.btn-outline');
     const origText = btn?.innerText;
@@ -363,29 +438,32 @@ export async function testStandardApi() {
         const timeout = setTimeout(() => controller.abort(), 15000);
 
         const useProxy = document.getElementById('cfgUseCorsProxy')?.checked || appState.settings.useCorsProxy;
-        const proxyUrl = document.getElementById('cfgCorsProxyUrl')?.value.trim() || appState.settings.corsProxyUrl;
-        const res = await fetch(resolveStandardApiUrl(apiUrl, useProxy, proxyUrl), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + apiKey
-            },
-            body: JSON.stringify({
-                model: model || 'gpt-3.5-turbo',
-                messages: [{ role: 'user', content: 'Hi' }],
-                max_tokens: 5
-            }),
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
+        const proxyUrl = document.getElementById('cfgCorsProxyUrl')?.value.trim() || appState.settings.corsProxyUrl || 'https://corsproxy.io/?';
+        let result;
+        try {
+            result = await postStandardApiForTest(apiUrl, apiKey, model, useProxy, proxyUrl, controller.signal);
+        } catch (err) {
+            if (!useProxy && isOpenCodeApiUrl(apiUrl) && isNetworkOrCorsError(err)) {
+                result = await postStandardApiForTest(apiUrl, apiKey, model, true, proxyUrl, controller.signal);
+                const proxyCb = document.getElementById('cfgUseCorsProxy');
+                if (proxyCb) proxyCb.checked = true;
+                appState.settings.useCorsProxy = true;
+                appState.settings.corsProxyUrl = proxyUrl;
+                saveLocalData();
+            } else {
+                throw err;
+            }
+        } finally {
+            clearTimeout(timeout);
+        }
 
-        let data;
-        try { data = await res.json(); } catch (_) { data = {}; }
+        const { res, data, usedProxy } = result;
 
         if (res.status === 429) {
             const retryAfter = res.headers.get('retry-after');
+            const seconds = setOpenCodeCooldown(retryAfter);
             showToast(`⚠️ OpenCode 触发速率限制${retryAfter ? `，约 ${retryAfter} 秒后重试` : ''}。这通常不是网页配置错误。`, 'warning', 8000);
-        } else if (res.ok && (data.choices?.[0]?.message?.content !== undefined || data.choices?.[0]?.text !== undefined)) {
+        } else if (res.ok && isUsableStandardResponse(data)) {
             showToast('✅ API 连接成功！响应正常', 'success', 4000);
         } else if (data.error?.message) {
             showToast('❌ ' + data.error.message, 'error', 7000);
@@ -415,6 +493,10 @@ export async function testDifyApi() {
     const apiUrl = document.getElementById('cfgDifyUrl').value.trim();
     if (!apiKey) return showToast('请先填写 Dify API Key', 'warning');
     if (!apiUrl) return showToast('请先填写 Dify API 地址', 'warning');
+    if (isOpenCodeRoute(apiUrl)) {
+        const left = getOpenCodeCooldownRemaining();
+        if (left > 0) return showToast(`OpenCode 正在限流冷却中，请约 ${left} 秒后再测试。`, 'warning', 6000);
+    }
 
     const btn = document.querySelector('#difyApiConfig .action-btn.btn-outline');
     const origText = btn?.innerText;

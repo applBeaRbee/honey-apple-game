@@ -26,10 +26,12 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+worker/wrangler.toml
 
 # Codex/Reasonix local workspace artifacts
 .reasonix/
 reasonix.toml
+.wrangler/
 
 # Local reference projects
 Liyuan-master/

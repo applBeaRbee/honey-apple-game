@@ -65,7 +65,7 @@ export function isCharacterPanel(name) {
 // ===== 预设 API 配置 =====
 export const API_PRESETS = [
     { name: '🔮 DeepSeek 官方', url: 'https://api.deepseek.com/chat/completions', model: 'deepseek-chat', note: 'DeepSeek 官方 API' },
-    { name: '🧠 OpenCode Zen', url: 'https://opencode.ai/zen/v1/chat/completions', model: 'deepseek-v4-flash', note: 'OpenCode Zen 网关' },
+    { name: '🧠 OpenCode Zen', url: 'https://opencode.ai/zen/v1/chat/completions', model: 'mimo-v2.5-free', note: 'OpenCode Zen 网关' },
     { name: '🌊 轨迹流动', url: 'https://guiji.ai/v1/chat/completions', model: 'deepseek-chat', note: '轨迹流动 API' },
     { name: '🔄 OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', model: 'openrouter/auto', note: '多模型路由' },
     { name: '🔌 SiliconFlow', url: 'https://api.siliconflow.cn/v1/chat/completions', model: 'deepseek-v3', note: '硅基流动' },

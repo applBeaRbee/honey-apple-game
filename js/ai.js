@@ -33,6 +33,85 @@ function resolveChatApiUrl(url) {
     return proxy + encodeURIComponent(normalized);
 }
 
+function isOpenCodeApiUrl(url) {
+    return /opencode\.ai\/zen/i.test(url || '');
+}
+
+function isOpenCodeRoute(url, model = '') {
+    return isOpenCodeApiUrl(url)
+        || /honey-apple-ai-proxy|workers\.dev/i.test(url || '')
+        || /mimo-v2\.5-free/i.test(model || '');
+}
+
+function getOpenCodeCooldownRemaining() {
+    const until = Number(appState.settings.openCodeCooldownUntil || 0);
+    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+function setOpenCodeCooldown(retryAfter) {
+    const seconds = Math.max(30, Number.parseInt(retryAfter, 10) || 90);
+    appState.settings.openCodeCooldownUntil = Date.now() + seconds * 1000;
+    saveLocalData();
+    return seconds;
+}
+
+function guardOpenCodeCooldown() {
+    if (!isOpenCodeRoute(appState.settings.apiUrl, appState.settings.model)) return false;
+    const left = getOpenCodeCooldownRemaining();
+    if (left <= 0) return false;
+    showToast(`OpenCode 正在限流冷却中，请约 ${left} 秒后再试。`, "warning", 6000);
+    return true;
+}
+
+function proxyChatApiUrl(url) {
+    const normalized = normalizeChatApiUrl(url);
+    const proxy = (appState.settings.corsProxyUrl || 'https://corsproxy.io/?').trim();
+    if (!proxy || normalized.startsWith(proxy)) return normalized;
+    return proxy + encodeURIComponent(normalized);
+}
+
+function isNetworkOrCorsError(error) {
+    const msg = error?.message || String(error || '');
+    return error?.name === 'TypeError'
+        || msg.includes('Failed to fetch')
+        || msg.includes('NetworkError')
+        || msg.includes('Load failed')
+        || msg.includes('CORS');
+}
+
+function extractCompletionText(data) {
+    const choice = data?.choices?.[0];
+    const message = choice?.message || {};
+    const parts = [];
+    if (typeof message.content === 'string' && message.content.trim()) parts.push(message.content);
+    if (typeof message.reasoning === 'string' && message.reasoning.trim()) parts.push(message.reasoning);
+    if (Array.isArray(message.reasoning_details)) {
+        message.reasoning_details.forEach(item => {
+            if (typeof item?.text === 'string' && item.text.trim()) parts.push(item.text);
+        });
+    }
+    if (typeof choice?.text === 'string' && choice.text.trim()) parts.push(choice.text);
+    return parts.join('\n').trim();
+}
+
+async function fetchChatCompletion(apiUrl, options) {
+    try {
+        return await fetchJson(resolveChatApiUrl(apiUrl), options);
+    } catch (error) {
+        const shouldRetryWithProxy = isOpenCodeApiUrl(apiUrl)
+            && !appState.settings.useCorsProxy
+            && !error.status
+            && isNetworkOrCorsError(error);
+        if (!shouldRetryWithProxy) throw error;
+
+        const data = await fetchJson(proxyChatApiUrl(apiUrl), options);
+        appState.settings.useCorsProxy = true;
+        appState.settings.corsProxyUrl = appState.settings.corsProxyUrl || 'https://corsproxy.io/?';
+        saveLocalData();
+        return data;
+    }
+}
+
 async function fetchJson(url, options) {
     const res = await fetch(url, options);
     let data = {};
@@ -55,6 +134,7 @@ export async function sendToAI(mailData = null) {
     const isDify = appState.settings.engineType === 'dify';
     if (isDify && !appState.settings.difyApiKey) return showToast("未配置 Dify 密钥", "error");
     if (!isDify && !appState.settings.apiKey) return showToast("未配置 API 密钥", "error");
+    if (!isDify && guardOpenCodeCooldown()) return;
     if (!gameConfig) return showToast("游戏配置缺失", "error");
     ensureLiyuanData(gameConfig);
 
@@ -162,7 +242,7 @@ export async function sendToAI(mailData = null) {
             msgs.push({ role: "system", content: format });
             msgs.push({ role: "user", content: userText });
 
-            const d = await fetchJson(resolveChatApiUrl(appState.settings.apiUrl), {
+            const d = await fetchChatCompletion(appState.settings.apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -173,7 +253,7 @@ export async function sendToAI(mailData = null) {
                     messages: msgs
                 })
             });
-            answer = d.choices?.[0]?.message?.content || d.choices?.[0]?.text || '';
+            answer = extractCompletionText(d);
             if (!answer) throw new Error('API 响应为空');
         }
 
@@ -308,7 +388,8 @@ export async function sendToAI(mailData = null) {
         if (!isMail && lid && document.getElementById(lid)) document.getElementById(lid).remove();
         gameConfig.history.pop();
         if (e.status === 429) {
-            showToast("OpenCode 当前触发速率限制。请等待后再试，不要连续点击发送；也可以更换模型或 API Key。", "warning", 8000);
+            const seconds = setOpenCodeCooldown(e.retryAfter);
+            showToast(`OpenCode 当前触发速率限制，请约 ${seconds} 秒后再试。免费模型高峰期很容易这样。`, "warning", 8000);
         } else {
             showToast("通信异常: " + e.message, "error");
         }
@@ -326,6 +407,7 @@ export async function forceSyncPanels() {
     const isDify = appState.settings.engineType === 'dify';
     if (isDify && !appState.settings.difyApiKey) return showToast("未配置 Dify 密钥", "error");
     if (!isDify && !appState.settings.apiKey) return showToast("未配置 API 密钥", "error");
+    if (!isDify && guardOpenCodeCooldown()) return;
     if (!gameConfig) return showToast("配置缺失", "error");
 
     showToast("强制洞察重构中...", "info", 4000);
@@ -351,7 +433,7 @@ export async function forceSyncPanels() {
             if (data.conversation_id) gameConfig.difyConversationId = data.conversation_id;
             answer = data.answer || "";
         } else {
-            const d = await fetchJson(resolveChatApiUrl(appState.settings.apiUrl), {
+            const d = await fetchChatCompletion(appState.settings.apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${appState.settings.apiKey}` },
                 body: JSON.stringify({
@@ -362,7 +444,7 @@ export async function forceSyncPanels() {
                     ]
                 })
             });
-            answer = d.choices?.[0]?.message?.content || d.choices?.[0]?.text || '';
+            answer = extractCompletionText(d);
             if (!answer) throw new Error('API 响应为空');
         }
         const parsed = safeParseJSON(answer);
@@ -385,10 +467,15 @@ export async function forceSyncPanels() {
             showToast("面板重构响应格式异常", "error");
         }
     } catch (e) {
-        showToast("强制同步异常: " + e.message, "error");
+        if (e.status === 429) {
+            const seconds = setOpenCodeCooldown(e.retryAfter);
+            showToast(`OpenCode 当前触发速率限制，请约 ${seconds} 秒后再试。`, "warning", 8000);
+        } else {
+            showToast("强制同步异常: " + e.message, "error");
+        }
     }
 }
 
-// ===== 导出到 window =====
+// ===== 瀵煎嚭鍒?window =====
 window.sendToAI = sendToAI;
 window.forceSyncPanels = forceSyncPanels;

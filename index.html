@@ -217,6 +217,11 @@
                 </div>
                 <input type="file" id="diaryImportInput" accept=".txt,.md,.log" style="display:none;" onchange="handleDiaryImport(event)">
 
+                <div id="mobileGameNav" class="mobile-game-tabs" style="display:none;">
+                    <button onclick="switchMobileGameTab('chat')" id="mbtn-chat" class="active">💬 剧情</button>
+                    <button onclick="switchMobileGameTab('panel')" id="mbtn-panel">📊 面板</button>
+                </div>
+
                 <div class="game-main-area show-chat" id="gameMainArea">
                     <div class="game-sidebar" id="gameSidebarUI"></div>
                     <div class="chat-area">
@@ -244,10 +249,6 @@
                 </div>
 
                 <!-- 移动端底部导航 -->
-                <div id="mobileGameNav" style="display:none;">
-                    <button onclick="switchMobileGameTab('chat')" id="mbtn-chat" class="active">💬 剧情</button>
-                    <button onclick="switchMobileGameTab('panel')" id="mbtn-panel">📊 面板</button>
-                </div>
             </div>
         </main>
     </div>
