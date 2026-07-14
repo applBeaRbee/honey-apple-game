@@ -3,7 +3,7 @@ import { appState, currentSessionId, gameConfig, currentUser, isLocalFile, isClo
 import { escapeHtml } from './constants.js';
 import { showToast, showConfirm } from './ui.js';
 import { saveLocalData } from './storage.js';
-import { renderLibrary } from './cards.js';
+import { renderLibrary, renderAvatarHtml } from './cards.js';
 import { updateWorldTimeUI, formatTimeShort } from './time.js';
 import { updateAmbientEnvironment } from './ambient.js';
 import { renderGamePanelsUI, drawRelationWeb, drawMapCanvas } from './panels.js';
@@ -33,6 +33,7 @@ export function renderSidebarSessions(query = document.getElementById('sessionSe
     }
     sessions.forEach(s => {
         const card = appState.cards.find(c => c.id === s.cardId);
+        const avatar = s.avatar || s.avatarDataUrl || card?.avatarDataUrl || card?.avatar || '📜';
         const isActive = s.id === currentSessionId;
         const d = document.createElement('div');
         d.className = `session-item${isActive ? ' active' : ''}`;
@@ -40,6 +41,7 @@ export function renderSidebarSessions(query = document.getElementById('sessionSe
         const time = s.lastUpdated ? formatSessionTime(s.lastUpdated) : '';
         const progress = Array.isArray(s.history) ? s.history.length : 0;
         d.innerHTML = `
+            <div class="session-item-avatar">${renderAvatarHtml(avatar, '42px')}</div>
             <div class="session-item-main">
                 <div class="session-item-name">${escapeHtml(s.name)}</div>
                 <div class="session-item-card">${escapeHtml(card?.name || '未知卡片')}</div>
@@ -66,8 +68,10 @@ function renderSidebarContext() {
         root.innerHTML = '<div class="sidebar-section-label">当前冒险</div><div class="sidebar-context-empty">从卡片库进入一个世界，<br>这里会显示当前进度。</div>';
         return;
     }
+    const avatar = session.avatar || session.avatarDataUrl || card.avatarDataUrl || card.avatar || '📜';
     root.innerHTML = `<div class="sidebar-section-label">当前冒险</div>
         <div class="sidebar-current-card">
+            <div class="sidebar-current-avatar">${renderAvatarHtml(avatar, '34px')}</div>
             <div class="sidebar-current-mark">✦</div>
             <div class="sidebar-current-copy"><strong>${escapeHtml(session.name)}</strong><span>${escapeHtml(card.name)}</span></div>
             <button class="sidebar-current-open" onclick="resumeSession('${session.id}')" title="回到当前冒险">↗</button>
@@ -123,6 +127,15 @@ export function toggleSidebar() {
     document.getElementById('sidebarBackdrop')?.classList.toggle('open');
 }
 
+export function toggleGameToolsMenu(event) {
+    event?.stopPropagation();
+    const menu = document.getElementById('topToolsMenu');
+    const toggle = document.querySelector('.top-more-toggle');
+    if (!menu) return;
+    const open = menu.classList.toggle('open');
+    toggle?.setAttribute('aria-expanded', String(open));
+}
+
 export function openSessionSetup(cardId) {
     const card = appState.cards.find(c => c.id === cardId);
     if (!card) return;
@@ -148,6 +161,8 @@ export function startSessionFromSetup() {
     const session = {
         id: 'sess_' + Date.now(),
         cardId: card.id,
+        avatar: card.avatarDataUrl || card.avatar || '📜',
+        avatarDataUrl: card.avatarDataUrl || (String(card.avatar || '').startsWith('data:') ? card.avatar : null),
         name: `${charName} 的冒险`,
         panels: panels,
         originalPanels: JSON.parse(JSON.stringify(panels)),
@@ -256,3 +271,13 @@ window.renderSidebarSessions = renderSidebarSessions;
 window.updateUserUI = updateUserUI;
 window.openSessionEditModal = openSessionEditModal;
 window.openCurrentSessionSetup = openCurrentSessionSetup;
+window.toggleGameToolsMenu = toggleGameToolsMenu;
+
+document.addEventListener('click', event => {
+    const menu = document.getElementById('topToolsMenu');
+    if (!menu?.classList.contains('open')) return;
+    if (!event.target.closest('.top-more-wrap')) {
+        menu.classList.remove('open');
+        document.querySelector('.top-more-toggle')?.setAttribute('aria-expanded', 'false');
+    }
+});

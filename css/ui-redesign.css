@@ -212,6 +212,10 @@ select {
 }
 
 .sidebar-current-mark {
+    display: none;
+}
+
+.sidebar-current-mark {
     width: 30px;
     height: 30px;
     display: grid;
@@ -329,11 +333,40 @@ select {
 
 .session-item {
     display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
     gap: 7px;
     padding: 11px 36px 11px 12px;
+    position: relative;
     border-radius: var(--ui-radius-sm);
     background: rgba(255,255,255,0.052);
     border-color: rgba(255,255,255,0.075);
+}
+
+.session-item-avatar,
+.sidebar-current-avatar {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.08);
+}
+
+.session-item-avatar .avatar,
+.sidebar-current-avatar .avatar,
+.session-item-avatar img,
+.sidebar-current-avatar img {
+    width: 100% !important;
+    height: 100% !important;
+    border: 0 !important;
+    border-radius: inherit !important;
+    object-fit: cover;
+}
+
+.sidebar-current-avatar {
+    width: 34px;
+    height: 34px;
 }
 
 .session-item:hover {
@@ -362,12 +395,56 @@ select {
 }
 
 .session-item-meta {
+    grid-column: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     color: rgba(239,230,221,0.42);
     font-size: 0.66rem;
+}
+
+.frontend-modal-box {
+    width: min(1120px, 94vw);
+    height: min(86vh, 820px);
+    display: flex;
+    flex-direction: column;
+}
+
+.frontend-modal-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.frontend-modal-content .card-frontend-section {
+    margin: 0;
+}
+
+.frontend-modal-content .frontend-preview-stack {
+    grid-template-columns: 1fr;
+}
+
+.frontend-modal-content .frontend-preview-frame {
+    height: min(68vh, 620px);
+}
+
+.frontend-empty-state {
+    min-height: 260px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    border: 1px dashed var(--ui-line-strong);
+    border-radius: var(--ui-radius-md);
+    background: rgba(255,255,255,0.48);
+    color: var(--ui-ink-3);
+    text-align: center;
+}
+
+.frontend-empty-state strong {
+    color: var(--ui-ink);
 }
 
 .session-del-btn {
@@ -562,6 +639,12 @@ select {
 
 /* Game top */
 .game-top-bar {
+    position: relative;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(0, auto);
+    align-items: center;
+    gap: 12px;
     min-height: 68px;
     height: auto;
     padding: 10px 14px 10px 18px;
@@ -574,6 +657,7 @@ select {
 .game-top-bar .title {
     color: var(--ui-ink);
     font: 900 0.98rem/1.2 var(--font-main);
+    min-width: 0;
 }
 
 #worldTimeDisplay {
@@ -586,6 +670,9 @@ select {
     gap: 6px;
     max-width: min(960px, 70vw);
     justify-content: flex-end;
+    min-width: 0;
+    flex-wrap: wrap;
+    overflow: visible;
 }
 
 .top-btn {
@@ -615,13 +702,62 @@ select {
     color: var(--ui-accent) !important;
 }
 
+.top-more-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.top-more-toggle {
+    min-width: 76px;
+}
+
+.top-tools-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 50;
+    display: none;
+    width: 170px;
+    padding: 6px;
+    border: 1px solid var(--ui-line-strong);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-surface-solid);
+    box-shadow: var(--ui-shadow-2);
+}
+
+.top-tools-menu.open {
+    display: grid;
+    gap: 3px;
+}
+
+.top-tools-menu button {
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    color: var(--ui-ink-2);
+    text-align: left;
+    cursor: pointer;
+    font: 700 0.78rem/1.2 var(--font-main);
+}
+
+.top-tools-menu button:hover {
+    background: var(--ui-accent-soft);
+    color: var(--ui-accent);
+}
+
 /* Game content */
 .game-main-area {
+    flex: 1;
     padding: 16px;
     gap: 16px;
     display: grid;
     grid-template-columns: 112px minmax(440px, 1.42fr) minmax(320px, 0.92fr);
+    height: auto;
     min-height: 0;
+    overflow: hidden;
 }
 
 .chat-area,
@@ -776,6 +912,10 @@ select {
     width: 112px;
     padding: 10px 6px;
     background: rgba(255,253,250,0.68);
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
 }
 
 .panel-tab-btn {
@@ -802,6 +942,11 @@ select {
     min-width: 0;
     padding: 18px;
     background: rgba(255,253,250,0.76);
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
 }
 
 .panel-title {
@@ -1252,17 +1397,49 @@ select.form-input {
     .game-top-bar {
         background: rgba(255,253,250,0.90);
         padding: 9px 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        min-height: 0;
     }
 
     .game-top-bar .actions {
+        max-width: none;
+        width: 100%;
         border-top: 1px dashed var(--ui-line);
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .game-top-bar .actions::-webkit-scrollbar {
+        display: none;
+    }
+
+    .top-more-wrap {
+        position: static;
+    }
+
+    .top-tools-menu {
+        position: fixed;
+        top: calc(58px + env(safe-area-inset-top));
+        right: 12px;
+        max-height: min(420px, calc(100vh - 86px));
+        overflow-y: auto;
     }
 
     .game-main-area {
+        flex: 1;
         display: flex !important;
         grid-template-columns: none;
         padding: 0;
         gap: 0;
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
     }
 
     .chat-area,
@@ -1296,7 +1473,18 @@ select.form-input {
 
     .game-sidebar {
         width: 100%;
+        height: auto;
+        max-height: 92px;
         background: rgba(255,253,250,0.88);
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .panel-content-area {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     .panel-tab-btn {

@@ -181,15 +181,21 @@
                     <div class="actions">
                         <button class="top-btn" onclick="switchMainView('library')">🏠 主页</button>
                         <button class="top-btn red-dot" id="btnMailbox" onclick="openMailboxModal()">✉️ 信箱</button>
-                        <button class="top-btn" onclick="openGalleryModal()">🎴 画廊</button>
-                        <button class="top-btn" onclick="openGameSettingsModal()">⚙️ 设置</button>
-                        <button class="top-btn" onclick="openLorebookModal()">📇 图鉴</button>
-                        <button class="top-btn" onclick="openMemoryModal()">🧠 记忆</button>
-                        <button class="top-btn" onclick="openWorldlineModal()">🌿 世界线</button>
-                        <button class="top-btn" onclick="openDirectorModal()">🎭 决策</button>
-                        <button class="top-btn" onclick="openCodexModal()">📚 知识库</button>
-                        <button class="top-btn" onclick="openUploadsModal()">🧩 素材</button>
-                        <button class="top-btn" onclick="openThemeModal()" style="color:#f5f0e6;background:rgba(155,89,182,0.2);border-color:rgba(155,89,182,0.5);">🎨 主题</button>
+                        <button class="top-btn primary-tool" onclick="openCurrentFrontendModal()">🌸 前端</button>
+                        <button class="top-btn primary-tool" onclick="openMemoryModal()">🧠 记忆</button>
+                        <button class="top-btn primary-tool" onclick="openLorebookModal()">📇 图鉴</button>
+                        <div class="top-more-wrap">
+                            <button class="top-btn top-more-toggle" onclick="toggleGameToolsMenu(event)" aria-expanded="false">⋯ 更多</button>
+                            <div class="top-tools-menu" id="topToolsMenu">
+                                <button onclick="openGalleryModal()">🎴 画廊</button>
+                                <button onclick="openGameSettingsModal()">⚙️ 设置</button>
+                                <button onclick="openWorldlineModal()">🌿 世界线</button>
+                                <button onclick="openDirectorModal()">🎭 决策</button>
+                                <button onclick="openCodexModal()">📚 知识库</button>
+                                <button onclick="openUploadsModal()">🧩 素材</button>
+                                <button onclick="openThemeModal()">🎨 主题</button>
+                            </div>
+                        </div>
                         <button class="top-btn import-diary" onclick="triggerImportDiary()">📥 导入</button>
                         <button class="top-btn" style="color: #f5f0e6; background: rgba(155, 89, 182, 0.2); border-color: rgba(155, 89, 182, 0.5);" onclick="exportDiary()">📤 导出</button>
                         <button class="top-btn edit-session-card" onclick="openSessionEditModal()">📝 编辑</button>
@@ -369,6 +375,14 @@
     </div>
 
     <!-- 信箱 -->
+    <div class="modal-overlay" id="frontendModal">
+        <div class="modal-box wide frontend-modal-box">
+            <h3 id="frontendModalTitle" style="margin-bottom:12px;font-size:1.1rem;">🌸 内置前端</h3>
+            <div id="frontendModalContent" class="frontend-modal-content"></div>
+            <button class="action-btn btn-outline" onclick="closeModal('frontendModal')" style="margin-top:12px;">关闭</button>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="mailboxModal">
         <div class="modal-box" style="width:700px;height:80vh;display:flex;flex-direction:column;">
             <h3 style="margin-bottom:10px;font-size:1.1rem;">✉️ 飞鸽传书</h3>

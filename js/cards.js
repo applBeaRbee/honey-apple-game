@@ -36,7 +36,7 @@ export function createDefaultCard() {
 }
 
 // ===== 渲染头像（支持图片 URL 和 emoji） =====
-function renderAvatarHtml(avatar, size = '60px') {
+export function renderAvatarHtml(avatar, size = '60px') {
     if (!avatar || avatar === '📜' || avatar === '🖼️') {
         return `<div class="avatar" style="width:${size};height:${size};font-size:${size === '60px' ? '1.8rem' : '3.5rem'};border-radius:50%;background:#e6decb;display:flex;align-items:center;justify-content:center;border:2px solid var(--border-color-strong);flex-shrink:0;overflow:hidden;">${escapeHtml(avatar||'📜')}</div>`;
     }
@@ -54,7 +54,7 @@ function isPngArrayBuffer(arrayBuffer) {
     return bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => bytes[index] === value);
 }
 
-function renderFrontendAssetsHtml(assets = []) {
+export function renderFrontendAssetsHtml(assets = []) {
     if (!Array.isArray(assets) || !assets.length) return '';
     return `<section class="card-detail-section card-frontend-section"><h4>🌸 内置前端 (${assets.length})</h4>
         <div class="frontend-preview-stack">
@@ -62,7 +62,7 @@ function renderFrontendAssetsHtml(assets = []) {
                 const title = `${asset.disabled ? '已禁用 · ' : ''}${asset.name || '内置前端'}`;
                 const frame = asset.sourceUrl
                     ? `<iframe class="frontend-preview-frame" src="${escapeHtml(asset.sourceUrl)}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe>`
-                    : `<iframe class="frontend-preview-frame" srcdoc="${escapeHtml(buildFrontendSrcdoc(asset.html || ''))}" loading="lazy" sandbox=""></iframe>`;
+                    : `<iframe class="frontend-preview-frame" srcdoc="${escapeHtml(buildFrontendSrcdoc(asset.html || ''))}" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe>`;
                 return `<article class="frontend-preview-card">
                     <div class="frontend-preview-head"><strong>${escapeHtml(title)}</strong>${asset.sourceUrl ? `<a href="${escapeHtml(asset.sourceUrl)}" target="_blank" rel="noopener noreferrer">打开源页面</a>` : ''}</div>
                     ${frame}
@@ -72,11 +72,35 @@ function renderFrontendAssetsHtml(assets = []) {
     </section>`;
 }
 
-function buildFrontendSrcdoc(html) {
+export function buildFrontendSrcdoc(html) {
+    const source = decodeFrontendHtml(String(html || '').trim());
+    if (!source) {
+        return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body><div>无可预览内容</div></body></html>`;
+    }
+    if (/^\s*(?:<!doctype\s+html[^>]*>|<html\b|<head\b)/i.test(source)) return source;
+    return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body>${source}</body></html>`;
     return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:10px;background:#fffafc;color:#3b2532;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;}*{box-sizing:border-box;max-width:100%;}</style></head><body>${html || '<div>无可预览内容</div>'}</body></html>`;
 }
 
 // ===== 渲染卡片库 =====
+function decodeFrontendHtml(value) {
+    if (!/[&](?:lt|gt|amp|quot|#39|apos);/i.test(value)) return value;
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = value;
+    return textarea.value;
+}
+
+function arrayBufferToDataUrl(arrayBuffer, mime = 'image/png') {
+    const bytes = new Uint8Array(arrayBuffer || []);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, chunk);
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
+}
+
 export function renderLibrary() {
     const grid = document.getElementById('cardGridUI');
     if (!grid) return;
@@ -388,8 +412,7 @@ function parseSillyTavernCardFromPNGLegacy(arrayBuffer) {
         }
         
         // 替换头像为 PNG 图片本身的 data URL
-        const blob = new Blob([arrayBuffer], { type: 'image/png' });
-        card.avatar = URL.createObjectURL(blob);
+        card.avatar = arrayBufferToDataUrl(arrayBuffer, 'image/png');
         card.avatarDataUrl = card.avatar;
         
         // 尝试从 post_history_instructions 获取更多提示词
@@ -766,9 +789,8 @@ export function openSillyTavernImportModal() {
 export function parseSillyTavernCardFromPNG(arrayBuffer) {
     if (!arrayBuffer) return null;
     try {
-        const avatar = isPngArrayBuffer(arrayBuffer) ? URL.createObjectURL(new Blob([arrayBuffer], { type: 'image/png' })) : null;
+        const avatar = isPngArrayBuffer(arrayBuffer) ? arrayBufferToDataUrl(arrayBuffer, 'image/png') : null;
         const card = parseSillyTavernCharacterCard(arrayBuffer, { avatar });
-        if (!card && avatar) URL.revokeObjectURL(avatar);
         return card;
     } catch (error) {
         console.error('解析 SillyTavern 角色卡失败:', error);

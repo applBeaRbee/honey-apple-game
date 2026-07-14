@@ -704,7 +704,7 @@ function looksLikeCharacterCard(value) {
     });
 }
 
-function extractFrontendAssets(data) {
+export function extractFrontendAssets(data) {
     const scripts = Array.isArray(data.extensions?.regex_scripts) ? data.extensions.regex_scripts : [];
     return scripts
         .map((script, index) => {
@@ -718,7 +718,7 @@ function extractFrontendAssets(data) {
                 disabled: script.disabled === true,
                 markdownOnly: script.markdownOnly === true,
                 sourceUrl: url,
-                html: html ? sanitizeFrontendHtml(html).substring(0, 60000) : '',
+                html: html ? sanitizeFrontendHtml(html).substring(0, 160000) : '',
                 placement: script.placement || []
             };
         })
@@ -727,11 +727,11 @@ function extractFrontendAssets(data) {
 }
 
 function extractHtmlSnippet(value) {
-    const text = String(value || '').trim();
+    const text = decodeHtmlEntities(String(value || '').trim());
     const fenced = text.match(/```(?:html|text)?\s*([\s\S]*?)\s*```/i);
-    const body = fenced ? fenced[1] : text;
-    if (!/<(?:div|details|style|body|iframe|section|article|span|p|script)\b/i.test(body)) return '';
-    return body.replace(/^<body[^>]*>/i, '').replace(/<\/body>$/i, '').trim();
+    const body = (fenced ? fenced[1] : text).trim();
+    if (!/<(?:!doctype|html|head|div|details|style|body|iframe|section|article|span|p|script)\b/i.test(body)) return '';
+    return body;
 }
 
 function extractFrontendUrl(value) {
@@ -741,9 +741,13 @@ function extractFrontendUrl(value) {
 
 function sanitizeFrontendHtml(value) {
     return String(value || '')
-        .replace(/<script[\s\S]*?<\/script>/gi, '')
-        .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-        .replace(/javascript:/gi, '')
         .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
         .trim();
+}
+
+function decodeHtmlEntities(value) {
+    if (!/[&](?:lt|gt|amp|quot|#39|apos);/i.test(value)) return value;
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = value;
+    return textarea.value;
 }

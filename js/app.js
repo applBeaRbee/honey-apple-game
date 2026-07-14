@@ -20,6 +20,7 @@ import { openExportModal, toggleAllExportCards, executeExport, importData, expor
 import { updateWorldTimeUI, animateTimePass, addWorldTime, formatTimeDisplay, formatTimeShort } from './time.js';
 import './world-state.js';
 import './fusion-ui.js';
+import './frontend-viewer.js';
 
 // ===== 初始化 =====
 window.onload = async function() {
