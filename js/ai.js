@@ -6,7 +6,7 @@ import { saveLocalData } from './storage.js';
 import { animateTimePass, getWorldTimeSnapshot, applyTurnTime, describeTimePass, formatWorldTime } from './time.js';
 import { updateAmbientEnvironment } from './ambient.js';
 import { renderGamePanelsUI, preserveSpecialPanels } from './panels.js';
-import { renderActionBar } from './actions.js';
+import { renderActionBar, createStateSnapshot, pushUndoSnapshot, restoreStateSnapshot } from './actions.js';
 import { renderSidebarSessions } from './sessions.js';
 import { formatMsgContent } from './chat.js';
 import { checkMailRedDot } from './mailbox.js';
@@ -94,6 +94,77 @@ function extractCompletionText(data) {
     return parts.join('\n').trim();
 }
 
+function isPlainObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function mergeValue(existing, incoming) {
+    if (incoming === undefined || incoming === null) return existing;
+    if (typeof incoming === 'string' && incoming.trim() === '') return existing;
+    if (Array.isArray(incoming)) return mergeArray(existing, incoming);
+    if (isPlainObject(incoming)) {
+        const base = isPlainObject(existing) ? { ...existing } : {};
+        for (const [key, val] of Object.entries(incoming)) {
+            base[key] = mergeValue(base[key], val);
+        }
+        return base;
+    }
+    return incoming;
+}
+
+function mergeArray(existing, incoming) {
+    if (!incoming.length) return Array.isArray(existing) ? existing : [];
+    if (!Array.isArray(existing) || !existing.length) return incoming;
+
+    const merged = [...existing];
+    for (const item of incoming) {
+        if (isPlainObject(item)) {
+            const key = item.id || item.name || item.title || item.subject;
+            const idx = key ? merged.findIndex(old => isPlainObject(old) && (old.id || old.name || old.title || old.subject) === key) : -1;
+            if (idx >= 0) merged[idx] = mergeValue(merged[idx], item);
+            else merged.push(item);
+        } else if (!merged.includes(item)) {
+            merged.push(item);
+        }
+    }
+    return merged;
+}
+
+function looksLikePanelPatch(parsed) {
+    if (!isPlainObject(parsed)) return false;
+    const metaKeys = new Set(['pass_time', 'time_passed', 'elapsed_minutes', 'elapsedMinutes', 'world_time', 'worldTime', 'current_time', 'currentTime', 'memory_db', 'backgroundMemory', 'ambient', 'actions', 'new_mails', 'new_gallery', 'cg_cutin', 'director_card']);
+    return Object.keys(parsed).some(key => !metaKeys.has(key));
+}
+
+function mergePanelUpdates(panelPatch, options = {}) {
+    if (!isPlainObject(panelPatch) || !gameConfig?.panels) return false;
+    let changed = false;
+    for (const [panelName, patch] of Object.entries(panelPatch)) {
+        if (patch === undefined || patch === null) continue;
+        if (!gameConfig.panels[panelName]) {
+            gameConfig.panels[panelName] = patch;
+            changed = true;
+            continue;
+        }
+        gameConfig.panels[panelName] = mergeValue(gameConfig.panels[panelName], patch);
+        changed = true;
+    }
+    if (changed && options.preserve !== false) preserveSpecialPanels(gameConfig.panels);
+    return changed;
+}
+
+function buildForceSyncTranscript() {
+    const lines = (gameConfig.history || []).map((m, index) => {
+        const time = m.worldTime ? formatWorldTime(m.worldTime) : '时间未知';
+        const role = m.role === 'user' ? '玩家' : 'AI';
+        const content = String(m.content || m.rawData || '').slice(0, 3000);
+        return `#${index + 1} [${time}] ${role}: ${content}`;
+    });
+    const full = lines.join('\n\n');
+    if (full.length <= 120000) return full;
+    return `${full.slice(0, 30000)}\n\n【中间过长，已保留开头与最近全文】\n\n${full.slice(-90000)}`;
+}
+
 async function fetchChatCompletion(apiUrl, options) {
     try {
         return await fetchJson(resolveChatApiUrl(apiUrl), options);
@@ -166,11 +237,13 @@ export async function sendToAI(mailData = null) {
     if (!gameConfig.history) gameConfig.history = [];
     // 记录消息时附带时间戳
     const timeSnapshot = getWorldTimeSnapshot();
+    const preTurnSnapshot = createStateSnapshot(isMail ? 'mail-turn' : 'chat-turn');
     gameConfig.history.push({
         role: "user",
         content: userText,
         isMail: isMail,
-        worldTime: timeSnapshot
+        worldTime: timeSnapshot,
+        preTurnSnapshot
     });
 
     // ===== 从用户输入提取记忆 =====
@@ -276,11 +349,8 @@ export async function sendToAI(mailData = null) {
 
         // 解析 JSON 数据
         if (parsed) {
-            let newP = parsed.panels || parsed;
-            for (let k in gameConfig.panels) {
-                if (newP[k] !== undefined) gameConfig.panels[k] = newP[k];
-            }
-            preserveSpecialPanels(gameConfig.panels);
+            const newP = parsed.panels || (looksLikePanelPatch(parsed) ? parsed : null);
+            mergePanelUpdates(newP);
 
             // 背景记忆
             if (parsed.backgroundMemory !== undefined) gameConfig.backgroundMemory = parsed.backgroundMemory;
@@ -290,8 +360,8 @@ export async function sendToAI(mailData = null) {
 
             // 环境氛围
             if (parsed.ambient) {
-                gameConfig.ambient = parsed.ambient;
-                updateAmbientEnvironment(parsed.ambient);
+                gameConfig.ambient = mergeValue(gameConfig.ambient || {}, parsed.ambient);
+                updateAmbientEnvironment(gameConfig.ambient);
             }
 
             // 新邮件
@@ -382,6 +452,7 @@ export async function sendToAI(mailData = null) {
     } catch (e) {
         if (!isMail && lid && document.getElementById(lid)) document.getElementById(lid).remove();
         gameConfig.history.pop();
+        restoreStateSnapshot(preTurnSnapshot);
         if (e.status === 429) {
             const seconds = setOpenCodeCooldown(e.retryAfter);
             showToast(`OpenCode 当前触发速率限制，请约 ${seconds} 秒后再试。免费模型高峰期很容易这样。`, "warning", 8000);
@@ -405,11 +476,39 @@ export async function forceSyncPanels() {
     if (!isDify && guardOpenCodeCooldown()) return;
     if (!gameConfig) return showToast("配置缺失", "error");
 
-    showToast("强制洞察重构中...", "info", 4000);
+    showToast("强制洞察全文检查中...", "info", 5000);
     try {
         let answer = "";
-        const recent = (gameConfig.history || []).slice(-12).map(m => `${m.role}: ${m.content || m.rawData || ''}`).join('\n');
-        const prompt = `【强制洞察】忽略叙事，作为数据同步引擎，从近期聊天中补齐面板和记忆数据库。\n【当前面板】:${JSON.stringify(gameConfig.panels)}\n【当前记忆库】:${JSON.stringify(gameConfig.memoryDb || {})}\n【近期聊天】:\n${recent}\n【输出规则】:末尾======DATA====== 后接纯JSON，可包含 panels、memory_db、backgroundMemory、ambient、actions。保持已有顶层面板名，继承历史物品，理顺关系网和地点。`;
+        const transcript = buildForceSyncTranscript();
+        const prompt = `【强制洞察：全文增量同步】
+你是游戏数据审计器。请读取完整聊天记录，检查当前面板和记忆数据库有没有遗漏、需要新增、或已有字段需要更新的地方。
+
+【重要约束】
+1. 只输出增量补丁，不要重写整份面板。
+2. 不要删除、清空、改名已有面板和已有字段。
+3. 如果某个原有字段没有新变化，就不要输出它。
+4. 数组只在确实发现新增/修正时输出，不能输出空数组覆盖旧数据。
+5. 如果需要新增面板，可以在 panels 中新增顶层面板名。
+6. 如果聊天记录很长，优先补齐人物、地点、关系、物品、任务、当前状态和重要事实。
+
+【当前面板快照】
+${JSON.stringify(gameConfig.panels || {}, null, 2)}
+
+【当前记忆库快照】
+${JSON.stringify(gameConfig.memoryDb || {}, null, 2)}
+
+【全文聊天记录】
+${transcript}
+
+【输出规则】
+末尾必须包含 ======DATA====== 后接纯 JSON。JSON 只能包含需要增量更新的内容：
+{
+  "panels": { "面板名": { "字段": "新值或修正值" } },
+  "memory_db": { "characters": {}, "locations": {}, "events": [], "facts": [], "quests": [], "sections": {} },
+  "backgroundMemory": "可选，仅在需要补充摘要时输出",
+  "ambient": { "time": "可选", "weather": "可选" },
+  "actions": []
+}`;
         if (isDify) {
             let difyBody = {
                 inputs: {},
@@ -444,16 +543,14 @@ export async function forceSyncPanels() {
         }
         const parsed = safeParseJSON(answer);
         if (parsed) {
-            const newPanels = parsed.panels || parsed;
-            for (let k in gameConfig.panels) {
-                if (newPanels[k] !== undefined) gameConfig.panels[k] = newPanels[k];
-            }
-            preserveSpecialPanels(gameConfig.panels);
+            pushUndoSnapshot('force-sync');
+            const newPanels = parsed.panels || (looksLikePanelPatch(parsed) ? parsed : null);
+            mergePanelUpdates(newPanels);
             if (parsed.backgroundMemory !== undefined) gameConfig.backgroundMemory = parsed.backgroundMemory;
             updateMemoryFromAIResponse(parsed);
             if (parsed.ambient) {
-                gameConfig.ambient = parsed.ambient;
-                updateAmbientEnvironment(parsed.ambient);
+                gameConfig.ambient = mergeValue(gameConfig.ambient || {}, parsed.ambient);
+                updateAmbientEnvironment(gameConfig.ambient);
             }
             renderGamePanelsUI();
             saveLocalData();

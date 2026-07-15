@@ -406,6 +406,37 @@ html.theme-cyber .form-textarea {
 
 /* Layout refinement: cleaner dashboard proportions. */
 @media (min-width: 1080px) {
+    .game-top-bar .top-more-wrap {
+        display: none !important;
+    }
+
+    .game-top-bar .actions {
+        flex: 1 1 auto !important;
+        max-width: none !important;
+        min-width: 0;
+        flex-wrap: nowrap !important;
+        justify-content: flex-end;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .game-top-bar .actions > .top-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .game-top-bar .desktop-tool,
+    .game-top-bar .mobile-collapse-tool {
+        display: flex !important;
+    }
+
+    .game-top-bar .mobile-only-tool,
+    .game-top-bar .mobile-menu-tool {
+        display: none !important;
+    }
+
     .game-main-area {
         grid-template-columns: 112px minmax(520px, 1.45fr) minmax(360px, 1fr);
     }
