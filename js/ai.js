@@ -3,7 +3,7 @@ import { appState, gameConfig, currentUser, isMailSending, setIsMailSending } fr
 import { escapeHtml, safeParseJSON } from './constants.js';
 import { showToast } from './ui.js';
 import { saveLocalData } from './storage.js';
-import { addWorldTime, animateTimePass, updateWorldTimeUI, getWorldTimeSnapshot, inferPassTime } from './time.js';
+import { animateTimePass, getWorldTimeSnapshot, applyTurnTime, describeTimePass, formatWorldTime } from './time.js';
 import { updateAmbientEnvironment } from './ambient.js';
 import { renderGamePanelsUI, preserveSpecialPanels } from './panels.js';
 import { renderActionBar } from './actions.js';
@@ -217,7 +217,7 @@ export async function sendToAI(mailData = null) {
         } else {
             // ===== 标准 OpenAI 格式 =====
             const base = `【核心指令】硬核DM。回复末尾必须包含======DATA====== 后接纯JSON。\n世界观:${gameConfig.worldSetting}\n背景:${gameConfig.storyBackground}\n主角:${gameConfig.charName}(${gameConfig.charInfo})\n守则:${gameConfig.systemPromptText}${loreStr}${memoryBlock}`;
-            const format = `【最高指令】1.更新面板状态 2.末尾======DATA====== 后接纯JSON 3.时空平滑 4.支持new_mails,new_gallery,cg_cutin,pass_time,ambient,memory_db 5.若用户请求方向或场景存在重大分歧，可输出 director_card:{title,body,options,freeform}\n【当前面板】:${JSON.stringify(gameConfig.panels)}\n【融合世界状态】:${liyuanContext}`;
+            const format = `【最高指令】1.更新面板状态 2.末尾======DATA====== 后接纯JSON 3.时空平滑，叙事中出现明确时间变化时必须在JSON写pass_time(分钟)或world_time:{day,hour,minute}，不要让正文时间与JSON时间矛盾 4.支持new_mails,new_gallery,cg_cutin,pass_time,world_time,ambient,memory_db 5.若用户请求方向或场景存在重大分歧，可输出 director_card:{title,body,options,freeform}\n【当前时间】:${formatWorldTime(gameConfig.worldTime)}\n【当前面板】:${JSON.stringify(gameConfig.panels)}\n【融合世界状态】:${liyuanContext}`;
 
             let msgs = [{ role: "system", content: base }];
 
@@ -268,15 +268,10 @@ export async function sendToAI(mailData = null) {
         const parsed = safeParseJSON(answer);
 
         // 时间处理
-        let timePassed = inferPassTime(userText, raw, parsed);
-        if (!isMail) {
-            const timeChange = addWorldTime(timePassed);
-            if (timePassed >= 60) {
-                const txt = timePassed >= 1440 * 30 ? "修真无岁月，世上已千年..." :
-                    (timePassed >= 1440 ? "几日之后..." : (timePassed >= 480 ? "一夜无话..." : "时光流转..."));
-                document.getElementById('timePassText').innerText = txt;
-                await animateTimePass(timePassed, timeChange?.before);
-            }
+        const turnTime = applyTurnTime(userText, raw, parsed, { advance: !isMail });
+        if (!isMail && turnTime.minutes >= 60) {
+            document.getElementById('timePassText').innerText = describeTimePass(turnTime.minutes);
+            await animateTimePass(turnTime.minutes, turnTime.before);
         }
 
         // 解析 JSON 数据
@@ -363,8 +358,8 @@ export async function sendToAI(mailData = null) {
             // 添加时间标签
             const timeTag = document.createElement('div');
             timeTag.className = 'chat-time-tag';
-            const wt = gameConfig.worldTime;
-            timeTag.innerText = `🕒 第${wt.day}天 ${String(wt.hour).padStart(2,'0')}:${String(wt.minute).padStart(2,'0')}`;
+            const wt = turnTime.after || getWorldTimeSnapshot();
+            timeTag.innerText = `🕒 ${formatWorldTime(wt)}`;
             document.getElementById(mid)?.appendChild(timeTag);
             setTimeout(() => history.scrollTo({ top: history.scrollHeight, behavior: 'smooth' }), 50);
         }
