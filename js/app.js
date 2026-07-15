@@ -16,6 +16,7 @@ import { renderActionBar, quickAction, undoLastAction } from './actions.js';
 import { rollD20, rollDice } from './dice.js';
 import { setupVoiceEvents } from './voice.js';
 import { updateAmbientEnvironment } from './ambient.js';
+import { showToast } from './ui.js';
 import { openExportModal, toggleAllExportCards, executeExport, importData, exportDiary, triggerImportDiary, handleDiaryImport, openApiModal, toggleApiConfigBlocks, saveApiSettings, testStandardApi, testDifyApi, openGameSettingsModal, saveGameSettings, openLorebookModal, saveLorebook } from './export-import.js';
 import { updateWorldTimeUI, animateTimePass, addWorldTime, formatTimeDisplay, formatTimeShort } from './time.js';
 import './world-state.js';
@@ -60,9 +61,16 @@ window.onload = async function() {
         }
     });
 
+    const hasSaveableState = () => Boolean(gameConfig || appState.sessions?.length || appState.cards?.length);
     const persistBeforeLeaving = () => flushLocalData();
     window.addEventListener('pagehide', persistBeforeLeaving);
-    window.addEventListener('beforeunload', persistBeforeLeaving);
+    window.addEventListener('beforeunload', event => {
+        persistBeforeLeaving();
+        if (!hasSaveableState()) return;
+        event.preventDefault();
+        event.returnValue = '页面正在自动保存，直接离开可能导致最新内容未同步到云端。';
+        return event.returnValue;
+    });
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') persistBeforeLeaving();
     });
@@ -70,6 +78,27 @@ window.onload = async function() {
     console.log('🍎 蜂蜜苹果酒馆 v2.0 - 模块化重构完成');
     console.log(`📚 ${appState.cards.length} 张卡片, ${appState.sessions.length} 个存档`);
 };
+
+export async function manualSaveGame() {
+    const btn = document.getElementById('btnManualSave');
+    const originalText = btn?.textContent || '💾 保存';
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '💾 保存中';
+        }
+        flushLocalData();
+        await saveLocalData();
+        showToast('已保存当前进度', 'success');
+    } catch (error) {
+        showToast('保存失败：' + (error.message || String(error)), 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+}
 
 // 导出关键模块到 window 以便调试
 window.__appState = appState;
@@ -79,3 +108,4 @@ window.__modules = {
     memory: { buildMemoryContext, getMemoryDb, openMemoryModal },
     time: { formatTimeShort, addWorldTime }
 };
+window.manualSaveGame = manualSaveGame;
