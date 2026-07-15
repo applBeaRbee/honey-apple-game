@@ -517,7 +517,7 @@ export async function sendToAI(mailData = null) {
             memorySnapshot: gameConfig.backgroundMemory,
             actions: acts,
             isMail: isMail,
-            worldTime: getWorldTimeSnapshot()
+            worldTime: turnTime.after || getWorldTimeSnapshot()
         });
         gameConfig.lastUpdated = Date.now();
         afterTurnBookkeeping(gameConfig, { reason: isMail ? '信件' : '剧情回合' });
