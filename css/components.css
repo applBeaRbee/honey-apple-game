@@ -269,6 +269,33 @@
     color: #4caf50;
     display: inline-block;
     width: max-content;
+    position: relative;
+    padding-left: 18px;
+}
+.cloud-sync-badge::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    background: currentColor;
+    box-shadow: 0 0 7px currentColor;
+}
+.cloud-sync-badge[data-status="syncing"] {
+    color: #e9b949;
+    border-color: rgba(233, 185, 73, 0.55);
+}
+.cloud-sync-badge[data-status="error"],
+.cloud-sync-badge[data-status="local"] {
+    color: var(--color-info);
+    border-color: rgba(120, 174, 214, 0.55);
+}
+.cloud-sync-badge[data-status="saved"] {
+    color: #65c466;
+    border-color: rgba(101, 196, 102, 0.55);
 }
 .cloud-sync-badge.offline {
     border-color: rgba(255, 255, 255, 0.2);

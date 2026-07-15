@@ -159,17 +159,15 @@ export function extractAbsoluteWorldTime(parsed = null, aiText = '') {
 
 export function inferPassTime(userText = '', aiText = '', parsed = null) {
     const explicit = parsed?.pass_time ?? parsed?.time_passed ?? parsed?.elapsed_minutes ?? parsed?.elapsedMinutes;
-    if (explicit !== undefined) return normalizeMinutes(explicit, 10);
-    const absolute = extractAbsoluteWorldTime(parsed, aiText);
+    if (explicit !== undefined) return normalizeMinutes(explicit, 0);
+    const absolute = extractAbsoluteWorldTime(parsed, '');
     if (absolute) return Math.max(0, worldTimeToMinutes(absolute) - worldTimeToMinutes(getWorldTimeSnapshot()));
 
-    const text = `${userText}\n${aiText}`;
+    const text = String(userText || '');
     if (/第二天|次日|翌日|一觉睡到|过夜|天亮/.test(text)) return 480;
-    if (/上午|下午|晚上|夜里|清晨|黄昏|放学|午休/.test(text)) return 60;
-    if (/赶路|旅行|路程|长途|训练|上课|课程|社团活动/.test(text)) return 45;
-    if (/等待|闲逛|休息|吃饭|洗澡|整理/.test(text)) return 20;
-    if (/战斗|追逐|争吵|搜索|调查|潜入|谈话|聊天/.test(text)) return 10;
-    return 5;
+    const elapsed = text.match(/(?:经过|过去|持续|花了|耗时)\s*(\d+(?:\.\d+)?)\s*(天|日|小时|时|分钟|分)/);
+    if (elapsed) return normalizeMinutes(`${elapsed[1]}${elapsed[2]}`, 0);
+    return 0;
 }
 
 export function applyTurnTime(userText = '', aiText = '', parsed = null, options = {}) {
@@ -178,7 +176,7 @@ export function applyTurnTime(userText = '', aiText = '', parsed = null, options
     const before = getWorldTimeSnapshot();
     if (options.advance === false) return { before, after: before, minutes: 0, changed: false };
 
-    const absolute = extractAbsoluteWorldTime(parsed, aiText);
+    const absolute = extractAbsoluteWorldTime(parsed, '');
     if (absolute) {
         const delta = Math.max(0, worldTimeToMinutes(absolute) - worldTimeToMinutes(before));
         gameConfig.worldTime = normalizeWorldTime(absolute);

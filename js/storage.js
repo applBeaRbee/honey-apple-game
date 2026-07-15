@@ -7,6 +7,17 @@ import { showToast } from './ui.js';
 // overwrite a newer conversation state.
 let cloudSaveChain = Promise.resolve();
 
+export function getLastCloudSaveTime() {
+    const key = getStorageKey();
+    return Number(localStorage.getItem('hat_last_cloud_save_' + key) || 0);
+}
+
+function publishCloudSaveStatus(status, detail = '') {
+    window.dispatchEvent(new CustomEvent('hat-cloud-save-status', {
+        detail: { status, detail, at: Date.now() }
+    }));
+}
+
 export async function initCloudBase() {
     if (isLocalFile) {
         console.warn('file:// mode: cloud storage is disabled.');
@@ -293,10 +304,14 @@ export async function saveLocalData() {
         console.error('Local save failed:', e);
     }
 
-    if (!(isCloudAvailable && tcbAuth && tcbDb)) return;
+    if (!(isCloudAvailable && tcbAuth && tcbDb)) {
+        publishCloudSaveStatus('local');
+        return;
+    }
     const cloudSnapshot = buildCloudSnapshot(snapshot);
     const payload = { gameData: cloudSnapshot, updateTime: Date.now() };
     const cloudKey = getCloudKey();
+    publishCloudSaveStatus('syncing');
     cloudSaveChain = cloudSaveChain.catch(() => {}).then(async () => {
         if (!isCloudAvailable || !tcbAuth || !tcbDb) return;
         try {
@@ -305,8 +320,10 @@ export async function saveLocalData() {
             if (payload.updateTime) {
                 localStorage.setItem('hat_last_cloud_save_' + key, String(payload.updateTime));
             }
+            publishCloudSaveStatus('saved');
         } catch (e) {
             console.error('Cloud save failed:', e);
+            publishCloudSaveStatus('error', e.message || String(e));
             showToast('云端保存失败，已只保存在本地：' + (e.message || String(e)), 'warning', 6000);
         }
     });

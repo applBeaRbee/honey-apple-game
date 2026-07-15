@@ -2,7 +2,7 @@
 import { appState, currentSessionId, gameConfig, currentUser, isLocalFile, isCloudAvailable, setCurrentSessionId, setGameConfig } from './state.js';
 import { escapeHtml } from './constants.js';
 import { showToast, showConfirm } from './ui.js';
-import { saveLocalData } from './storage.js';
+import { saveLocalData, getLastCloudSaveTime } from './storage.js';
 import { renderLibrary, renderAvatarHtml } from './cards.js';
 import { updateWorldTimeUI, formatTimeShort } from './time.js';
 import { updateAmbientEnvironment } from './ambient.js';
@@ -90,11 +90,19 @@ export function updateUserUI() {
     const badgeEl = document.getElementById('uiSyncBadge');
     if (!avatarEl || !nameEl || !badgeEl) return;
     const isLocal = isLocalFile || !isCloudAvailable;
+    const lastCloudSave = getLastCloudSaveTime();
+    const status = document.body.dataset.cloudSaveStatus || (isLocal ? 'local' : (lastCloudSave ? 'saved' : 'syncing'));
+    const statusText = status === 'saved' ? '云端已保存' : status === 'syncing' ? '同步中' : '仅本地保存';
+    badgeEl.dataset.status = status;
+    const displayStatusText = status === 'saved' ? '\u4e91\u7aef\u5df2\u4fdd\u5b58' : status === 'syncing' ? '\u540c\u6b65\u4e2d' : '\u4ec5\u672c\u5730\u4fdd\u5b58';
+    badgeEl.title = displayStatusText;
+    badgeEl.title = status === 'error' ? '云端保存失败，当前内容已保存在本地' : statusText;
     if (currentUser) {
         avatarEl.innerText = currentUser.charAt(0).toUpperCase();
         nameEl.innerText = currentUser;
         badgeEl.innerText = isLocal ? "💾 本地多账号" : "☁️ 云端同步";
         badgeEl.className = "cloud-sync-badge";
+        badgeEl.innerText = displayStatusText;
         if (isLocal) {
             badgeEl.style.borderColor = "var(--color-info)";
             badgeEl.style.color = "var(--color-info)";
@@ -107,6 +115,7 @@ export function updateUserUI() {
         nameEl.innerText = "游客身份";
         badgeEl.innerText = isLocal ? "离线沙盒" : "云端就绪";
         badgeEl.className = "cloud-sync-badge offline";
+        badgeEl.innerText = displayStatusText;
     }
 }
 
@@ -275,6 +284,11 @@ window.updateUserUI = updateUserUI;
 window.openSessionEditModal = openSessionEditModal;
 window.openCurrentSessionSetup = openCurrentSessionSetup;
 window.toggleGameToolsMenu = toggleGameToolsMenu;
+
+window.addEventListener('hat-cloud-save-status', event => {
+    document.body.dataset.cloudSaveStatus = event.detail?.status || 'local';
+    updateUserUI();
+});
 
 document.addEventListener('click', event => {
     const menu = document.getElementById('topToolsMenu');
