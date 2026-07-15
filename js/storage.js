@@ -204,6 +204,81 @@ function snapshotAppState() {
     }
 }
 
+function stripHugeText(value, limit = 12000) {
+    if (typeof value !== 'string') return value;
+    return value.length > limit ? value.slice(0, limit) : value;
+}
+
+function slimFrontendAsset(asset) {
+    if (!asset || typeof asset !== 'object') return asset;
+    const slim = {
+        id: asset.id,
+        name: asset.name,
+        disabled: asset.disabled,
+        markdownOnly: asset.markdownOnly,
+        sourceUrl: asset.sourceUrl,
+        placement: Array.isArray(asset.placement) ? asset.placement : []
+    };
+    if (typeof asset.html === 'string' && asset.html.length <= 12000) {
+        slim.html = asset.html;
+    }
+    return slim;
+}
+
+function slimHistoryEntry(entry) {
+    if (!entry || typeof entry !== 'object') return entry;
+    const slim = { ...entry };
+    delete slim.rawData;
+    delete slim.preTurnSnapshot;
+    delete slim.panelsSnapshot;
+    delete slim.memorySnapshot;
+    if (typeof slim.content === 'string') slim.content = stripHugeText(slim.content, 8000);
+    return slim;
+}
+
+function slimCardForCloud(card) {
+    if (!card || typeof card !== 'object') return card;
+    const slim = { ...card };
+    delete slim.rawCardData;
+    if (typeof slim.avatarDataUrl === 'string' && slim.avatarDataUrl.length > 12000) {
+        slim.avatarDataUrl = null;
+    }
+    if (Array.isArray(slim.frontendAssets)) {
+        slim.frontendAssets = slim.frontendAssets.map(slimFrontendAsset);
+    }
+    if (slim.lorebook && typeof slim.lorebook === 'object') {
+        Object.keys(slim.lorebook).forEach(key => {
+            slim.lorebook[key] = stripHugeText(String(slim.lorebook[key] || ''), 2000);
+        });
+    }
+    slim.systemPrompt = stripHugeText(slim.systemPrompt, 12000);
+    slim.openingText = stripHugeText(slim.openingText, 8000);
+    slim.storyBackground = stripHugeText(slim.storyBackground, 8000);
+    return slim;
+}
+
+function slimSessionForCloud(session) {
+    if (!session || typeof session !== 'object') return session;
+    const slim = { ...session };
+    slim.history = Array.isArray(session.history) ? session.history.map(slimHistoryEntry) : [];
+    slim.cards = undefined;
+    slim.preTurnSnapshot = undefined;
+    if (typeof slim.backgroundMemory === 'string') slim.backgroundMemory = stripHugeText(slim.backgroundMemory, 6000);
+    if (typeof slim.storyBackground === 'string') slim.storyBackground = stripHugeText(slim.storyBackground, 8000);
+    if (typeof slim.systemPromptText === 'string') slim.systemPromptText = stripHugeText(slim.systemPromptText, 12000);
+    if (typeof slim.openingText === 'string') slim.openingText = stripHugeText(slim.openingText, 8000);
+    if (typeof slim.charInfo === 'string') slim.charInfo = stripHugeText(slim.charInfo, 6000);
+    if (typeof slim.worldSetting === 'string') slim.worldSetting = stripHugeText(slim.worldSetting, 6000);
+    return slim;
+}
+
+function buildCloudSnapshot(snapshot) {
+    const cloud = JSON.parse(JSON.stringify(snapshot));
+    cloud.cards = Array.isArray(cloud.cards) ? cloud.cards.map(slimCardForCloud) : [];
+    cloud.sessions = Array.isArray(cloud.sessions) ? cloud.sessions.map(slimSessionForCloud) : [];
+    return cloud;
+}
+
 export async function saveLocalData() {
     const key = getStorageKey();
     const snapshot = snapshotAppState();
@@ -219,13 +294,18 @@ export async function saveLocalData() {
     }
 
     if (!(isCloudAvailable && tcbAuth && tcbDb)) return;
-    const payload = { gameData: snapshot, updateTime: Date.now() };
+    const cloudSnapshot = buildCloudSnapshot(snapshot);
+    const payload = { gameData: cloudSnapshot, updateTime: Date.now() };
     const cloudKey = getCloudKey();
     cloudSaveChain = cloudSaveChain.catch(() => {}).then(async () => {
         if (!isCloudAvailable || !tcbAuth || !tcbDb) return;
         try {
             if (!tcbAuth.hasLoginState()) await tcbAuth.anonymousAuthProvider().signIn();
             await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
+            try {
+                const sizeKb = Math.round(JSON.stringify(payload).length / 1024);
+                if (sizeKb > 500) showToast(`云端保存已瘦身，但仍然较大（约 ${sizeKb}KB）`, 'warning', 4000);
+            } catch (_) {}
         } catch (e) {
             console.error('Cloud save failed:', e);
             showToast('云端保存失败，已只保存在本地：' + (e.message || String(e)), 'warning', 6000);

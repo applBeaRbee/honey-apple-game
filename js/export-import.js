@@ -2,7 +2,7 @@
 import { appState, gameConfig } from './state.js';
 import { escapeHtml, generateId } from './constants.js';
 import { showToast, showConfirm, closeModal } from './ui.js';
-import { saveLocalData } from './storage.js';
+import { saveLocalData, checkCloudStorageStatus } from './storage.js';
 import { renderLibrary } from './cards.js';
 import { renderSidebarSessions } from './sessions.js';
 
@@ -619,6 +619,39 @@ window.openGameSettingsModal = openGameSettingsModal;
 window.saveGameSettings = saveGameSettings;
 window.openLorebookModal = openLorebookModal;
 window.saveLorebook = saveLorebook;
+
+export async function runCloudDiagnostics() {
+    const output = document.getElementById('cloudDiagOutput');
+    if (output) output.textContent = '正在运行诊断...';
+    try {
+        const status = await checkCloudStorageStatus();
+        let latestCloudSize = '';
+        try {
+            const key = `hat_data_${localStorage.getItem('hat_current_user') || 'user_guest'}`;
+            const raw = localStorage.getItem(key);
+            latestCloudSize = raw ? `${Math.round(raw.length / 1024)} KB 本地整包` : '无本地整包';
+        } catch (_) {}
+        const lines = [
+            `协议: ${status.protocol}`,
+            `SDK 已加载: ${status.sdkLoaded}`,
+            `云端可用: ${status.cloudAvailable}`,
+            `App 已初始化: ${status.hasApp}`,
+            `Auth 已初始化: ${status.hasAuth}`,
+            `DB 已初始化: ${status.hasDb}`,
+            `本地整包大小: ${latestCloudSize}`,
+            `结果: ${status.ok ? '通过' : '失败'}`,
+            `信息: ${status.message || '无'}`
+        ];
+        if (output) output.textContent = lines.join('\n');
+        showToast(status.ok ? '云端诊断通过' : '云端诊断失败，请查看详情', status.ok ? 'success' : 'warning', 5000);
+    } catch (error) {
+        const message = error.message || String(error);
+        if (output) output.textContent = '诊断异常:\n' + message;
+        showToast('云端诊断异常: ' + message, 'error', 5000);
+    }
+}
+
+window.runCloudDiagnostics = runCloudDiagnostics;
 
 // Robust import handlers kept separate from the legacy parser above.
 async function importDataV2(event) {
