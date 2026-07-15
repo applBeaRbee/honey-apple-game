@@ -702,3 +702,29 @@ async function handleDiaryImportV2(event) {
 
 window.importData = importDataV2;
 window.handleDiaryImport = handleDiaryImportV2;
+
+function exportDiaryV2() {
+    if (!gameConfig) return showToast('没有活跃会话', 'warning');
+    const lines = [`# ${gameConfig.name || '冒险日志'}`, ''];
+    lines.push(`角色：${gameConfig.charName || ''} (${gameConfig.charInfo || ''})`);
+    lines.push(`背景：${gameConfig.storyBackground || ''}`);
+    lines.push('');
+    (gameConfig.history || []).forEach(message => {
+        const who = message.role === 'user' ? (gameConfig.charName || '玩家') : 'DM';
+        const time = message.worldTime
+            ? `[第${message.worldTime.day}天 ${String(message.worldTime.hour).padStart(2, '0')}:${String(message.worldTime.minute).padStart(2, '0')}] `
+            : '';
+        lines.push(`${time}${who}: ${message.content || message.rawData || ''}`);
+        lines.push('');
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${gameConfig.name || '冒险'}_冒险日志.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('日志导出成功', 'success');
+}
+
+window.exportDiary = exportDiaryV2;
