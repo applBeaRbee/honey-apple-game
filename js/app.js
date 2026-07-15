@@ -1,7 +1,7 @@
 // ================= 应用入口 =================
 // 导入所有模块以注册其功能
 import { appState, gameConfig, currentUser } from './state.js';
-import { loadLocalData, initCloudBase, saveLocalData, flushLocalData } from './storage.js';
+import { loadLocalData, initCloudBase, saveLocalData, flushLocalData, waitForCloudSave } from './storage.js';
 import { renderLibrary, createDefaultCard, openCardEditor, saveCardEditor, deleteCard, duplicateCard } from './cards.js';
 import { renderSidebarSessions, updateUserUI, switchMainView, toggleSidebar, switchMobileGameTab, openSessionSetup, startSessionFromSetup, resumeSession, deleteSession, openSessionEditModal } from './sessions.js';
 import { renderGamePanelsUI, switchGamePanelTab, deleteCustomPanel, addListItem, removeListItem, openAddPropertyModal, confirmAddProperty, openEditPropertyModal, confirmEditProperty, deleteProperty, openEditListItemModal, confirmEditListItem, openAddCustomPanelModal, confirmAddCustomPanel, openLegendaryItem } from './panels.js';
@@ -89,7 +89,8 @@ export async function manualSaveGame() {
         }
         flushLocalData();
         await saveLocalData();
-        showToast('已保存当前进度', 'success');
+        const cloudSaved = await waitForCloudSave();
+        showToast(cloudSaved ? '已保存当前进度' : '已保存到本地，云端正在重试', cloudSaved ? 'success' : 'warning');
     } catch (error) {
         showToast('保存失败：' + (error.message || String(error)), 'error');
     } finally {

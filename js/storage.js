@@ -6,6 +6,19 @@ import { showToast } from './ui.js';
 // Save immutable snapshots in order. A slow older cloud request must not
 // overwrite a newer conversation state.
 let cloudSaveChain = Promise.resolve();
+let cloudSaveScheduled = false;
+let cloudSaveRunning = false;
+let pendingCloudPayload = null;
+let pendingCloudKey = '';
+let pendingStorageKey = '';
+let cloudFailureCount = 0;
+let lastCloudErrorToastAt = 0;
+const CLOUD_SAVE_DEBOUNCE_MS = 900;
+const CLOUD_SAVE_RETRY_DELAYS = [1200, 3000];
+const CLOUD_SAVE_BACKGROUND_RETRY_MS = 15000;
+const IDB_NAME = 'honey_apple_storage';
+const IDB_STORE = 'saves';
+const IDB_VERSION = 1;
 
 export function getLastCloudSaveTime() {
     const key = getStorageKey();
@@ -16,6 +29,172 @@ function publishCloudSaveStatus(status, detail = '') {
     window.dispatchEvent(new CustomEvent('hat-cloud-save-status', {
         detail: { status, detail, at: Date.now() }
     }));
+}
+
+function isQuotaError(error) {
+    return error?.name === 'QuotaExceededError' || /quota/i.test(error?.message || String(error || ''));
+}
+
+function safeSetLocalStorage(key, value) {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (error) {
+        if (!isQuotaError(error)) throw error;
+        return false;
+    }
+}
+
+function pruneStorageKeys(prefix, keep = 6) {
+    const items = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (!key?.startsWith(prefix)) continue;
+        let updatedAt = 0;
+        try {
+            updatedAt = Number(JSON.parse(localStorage.getItem(key) || '{}')?.updatedAt || 0);
+        } catch (_) {}
+        items.push({ key, updatedAt });
+    }
+    items.sort((a, b) => b.updatedAt - a.updatedAt).slice(keep).forEach(item => localStorage.removeItem(item.key));
+}
+
+function pruneUserBackups() {
+    pruneStorageKeys(`hat_live_session_${getStorageKey()}_`, 4);
+    pruneStorageKeys(`hat_session_backup_${getStorageKey()}_`, 6);
+}
+
+function openSaveDb() {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error('IndexedDB is unavailable.'));
+            return;
+        }
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error('Could not open IndexedDB.'));
+    });
+}
+
+async function idbSet(key, value) {
+    const db = await openSaveDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); reject(tx.error || new Error('IndexedDB write failed.')); };
+    });
+}
+
+async function idbGet(key) {
+    const db = await openSaveDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        tx.oncomplete = () => db.close();
+        tx.onerror = () => { db.close(); reject(tx.error || new Error('IndexedDB read failed.')); };
+    });
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function shouldToastCloudError() {
+    const now = Date.now();
+    if (cloudFailureCount < 2 && now - lastCloudErrorToastAt < 60000) return false;
+    lastCloudErrorToastAt = now;
+    return true;
+}
+
+async function ensureCloudLogin() {
+    if (!tcbAuth?.hasLoginState()) {
+        await tcbAuth.anonymousAuthProvider().signIn();
+    }
+}
+
+async function writeCloudPayload(payload, cloudKey) {
+    let lastError = null;
+    for (let attempt = 0; attempt <= CLOUD_SAVE_RETRY_DELAYS.length; attempt++) {
+        try {
+            await ensureCloudLogin();
+            await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
+            return;
+        } catch (error) {
+            lastError = error;
+            if (attempt < CLOUD_SAVE_RETRY_DELAYS.length) {
+                await delay(CLOUD_SAVE_RETRY_DELAYS[attempt]);
+            }
+        }
+    }
+    throw lastError;
+}
+
+async function flushCloudSaveQueue() {
+    cloudSaveScheduled = false;
+    if (cloudSaveRunning) return;
+    cloudSaveRunning = true;
+    try {
+        while (pendingCloudPayload) {
+            const payload = pendingCloudPayload;
+            const cloudKey = pendingCloudKey;
+            const storageKey = pendingStorageKey;
+            pendingCloudPayload = null;
+            pendingCloudKey = '';
+            pendingStorageKey = '';
+            try {
+                await writeCloudPayload(payload, cloudKey);
+                if (payload.updateTime) {
+                    localStorage.setItem('hat_last_cloud_save_' + storageKey, String(payload.updateTime));
+                }
+                cloudFailureCount = 0;
+                publishCloudSaveStatus('saved');
+            } catch (e) {
+                cloudFailureCount += 1;
+                console.error('Cloud save failed:', e);
+                publishCloudSaveStatus('error', e.message || String(e));
+                if (shouldToastCloudError()) {
+                    showToast('\u4e91\u7aef\u4fdd\u5b58\u5931\u8d25\uff0c\u5df2\u4fdd\u5b58\u5728\u672c\u5730\u3002\u7cfb\u7edf\u4f1a\u7ee7\u7eed\u81ea\u52a8\u91cd\u8bd5\uff1a' + (e.message || String(e)), 'warning', 7000);
+                }
+                if (!pendingCloudPayload) {
+                    pendingCloudPayload = payload;
+                    pendingCloudKey = cloudKey;
+                    pendingStorageKey = storageKey;
+                }
+                break;
+            }
+        }
+    } finally {
+        cloudSaveRunning = false;
+        if (pendingCloudPayload && !cloudSaveScheduled) {
+            cloudSaveScheduled = true;
+            cloudSaveChain = cloudSaveChain.catch(() => {}).then(() => delay(CLOUD_SAVE_BACKGROUND_RETRY_MS)).then(flushCloudSaveQueue);
+        }
+    }
+}
+
+function queueCloudSave(payload, cloudKey, storageKey) {
+    pendingCloudPayload = payload;
+    pendingCloudKey = cloudKey;
+    pendingStorageKey = storageKey;
+    publishCloudSaveStatus('syncing');
+    if (!cloudSaveScheduled && !cloudSaveRunning) {
+        cloudSaveScheduled = true;
+        cloudSaveChain = cloudSaveChain.catch(() => {}).then(() => delay(CLOUD_SAVE_DEBOUNCE_MS)).then(flushCloudSaveQueue);
+    }
+    return cloudSaveChain;
+}
+
+export async function waitForCloudSave() {
+    if (!(isCloudAvailable && tcbAuth && tcbDb)) return false;
+    await cloudSaveChain.catch(() => {});
+    if (pendingCloudPayload) await flushCloudSaveQueue();
+    return !pendingCloudPayload && getLastCloudSaveTime() > 0;
 }
 
 export async function initCloudBase() {
@@ -62,7 +241,7 @@ function sessionBackupKey(sessionId) {
 function buildSessionRecovery(session) {
     if (!session?.id) return null;
     const fields = [
-        'id', 'cardId', 'name', 'avatar', 'avatarDataUrl', 'lastUpdated',
+        'id', 'cardId', 'name', 'lastUpdated',
         'history', 'panels', 'originalPanels', 'customPanels', 'backgroundMemory',
         'memoryDb', 'memoryTiers', 'worldTime', 'ambient', 'mailbox', 'gallery',
         'worldState', 'worldline', 'undoStack', 'lorebook', 'difyConversationId',
@@ -78,13 +257,20 @@ function buildSessionRecovery(session) {
 function saveSessionBackups(sessions = []) {
     sessions.forEach(session => {
         if (!session?.id) return;
-        const recovery = buildSessionRecovery(session);
+        const recovery = stripDisposableSessionData(buildSessionRecovery(session));
         if (!recovery) return;
         try {
-            localStorage.setItem(sessionBackupKey(session.id), JSON.stringify({
+            const ok = safeSetLocalStorage(sessionBackupKey(session.id), JSON.stringify({
                 session: recovery,
                 updatedAt: Number(session.lastUpdated || Date.now())
             }));
+            if (!ok) {
+                pruneUserBackups();
+                safeSetLocalStorage(sessionBackupKey(session.id), JSON.stringify({
+                    session: recovery,
+                    updatedAt: Number(session.lastUpdated || Date.now())
+                }));
+            }
         } catch (error) {
             console.warn('Session backup failed:', error);
         }
@@ -98,7 +284,7 @@ function liveSessionKey(sessionId) {
 function buildLiveSessionSnapshot(session) {
     if (!session?.id) return null;
     const fields = [
-        'id', 'cardId', 'name', 'avatar', 'avatarDataUrl', 'lastUpdated',
+        'id', 'cardId', 'name', 'lastUpdated',
         'history', 'panels', 'originalPanels', 'customPanels', 'backgroundMemory',
         'memoryDb', 'memoryTiers', 'worldTime', 'ambient', 'mailbox', 'gallery',
         'worldState', 'worldline', 'undoStack', 'lorebook', 'difyConversationId',
@@ -112,13 +298,20 @@ function buildLiveSessionSnapshot(session) {
 }
 
 function saveLiveSessionSnapshot(session) {
-    const recovery = buildLiveSessionSnapshot(session);
+    const recovery = stripDisposableSessionData(buildLiveSessionSnapshot(session));
     if (!recovery) return;
     try {
-        localStorage.setItem(liveSessionKey(session.id), JSON.stringify({
+        const ok = safeSetLocalStorage(liveSessionKey(session.id), JSON.stringify({
             session: recovery,
             updatedAt: Number(session.lastUpdated || Date.now())
         }));
+        if (!ok) {
+            pruneUserBackups();
+            safeSetLocalStorage(liveSessionKey(session.id), JSON.stringify({
+                session: recovery,
+                updatedAt: Number(session.lastUpdated || Date.now())
+            }));
+        }
     } catch (error) {
         console.warn('Live session snapshot failed:', error);
     }
@@ -169,7 +362,11 @@ function restoreSessionBackups(sessions = []) {
 export async function loadLocalData() {
     let loadedFromCloud = false;
     const key = getStorageKey();
-    const localSaved = localStorage.getItem('hat_data_' + key);
+    const idbSaved = await idbGet('hat_data_' + key).catch(error => {
+        console.warn('IndexedDB load failed:', error);
+        return null;
+    });
+    const localSaved = idbSaved || localStorage.getItem('hat_data_' + key);
     const localUpdatedAt = Number(localStorage.getItem('hat_data_meta_' + key) || 0);
     let localParsed = null;
     if (localSaved) {
@@ -193,6 +390,7 @@ export async function loadLocalData() {
         if (localParsed) {
             localParsed.sessions = mergeLiveSessionSnapshots(restoreSessionBackups(localParsed.sessions || []));
             applyStoredData(localParsed);
+            if (!idbSaved) saveSnapshotToLocal(key, localParsed).catch(error => console.warn('IndexedDB migration failed:', error));
         } else {
             setAppState({ cards: [], sessions: [], settings: { ...DEFAULT_SETTINGS } });
         }
@@ -220,20 +418,8 @@ function stripHugeText(value, limit = 12000) {
     return value.length > limit ? value.slice(0, limit) : value;
 }
 
-function slimFrontendAsset(asset) {
-    if (!asset || typeof asset !== 'object') return asset;
-    const slim = {
-        id: asset.id,
-        name: asset.name,
-        disabled: asset.disabled,
-        markdownOnly: asset.markdownOnly,
-        sourceUrl: asset.sourceUrl,
-        placement: Array.isArray(asset.placement) ? asset.placement : []
-    };
-    if (typeof asset.html === 'string' && asset.html.length <= 12000) {
-        slim.html = asset.html;
-    }
-    return slim;
+function dropLargeDataUrl(value) {
+    return typeof value === 'string' && value.startsWith('data:') && value.length > 12000 ? null : value;
 }
 
 function slimHistoryEntry(entry) {
@@ -243,51 +429,68 @@ function slimHistoryEntry(entry) {
     delete slim.preTurnSnapshot;
     delete slim.panelsSnapshot;
     delete slim.memorySnapshot;
-    if (typeof slim.content === 'string') slim.content = stripHugeText(slim.content, 8000);
     return slim;
 }
 
-function slimCardForCloud(card) {
+function stripHistorySnapshots(history = []) {
+    if (!Array.isArray(history)) return [];
+    return history.map(slimHistoryEntry);
+}
+
+function stripDisposableCardData(card) {
     if (!card || typeof card !== 'object') return card;
     const slim = { ...card };
     delete slim.rawCardData;
-    if (typeof slim.avatarDataUrl === 'string' && slim.avatarDataUrl.length > 12000) {
-        slim.avatarDataUrl = null;
+    delete slim.frontendAssets;
+    delete slim.avatarDataUrl;
+    if (typeof slim.avatar === 'string' && slim.avatar.startsWith('data:') && slim.avatar.length > 12000) {
+        slim.avatar = '📜';
     }
-    if (Array.isArray(slim.frontendAssets)) {
-        slim.frontendAssets = slim.frontendAssets.map(slimFrontendAsset);
-    }
-    if (slim.lorebook && typeof slim.lorebook === 'object') {
-        Object.keys(slim.lorebook).forEach(key => {
-            slim.lorebook[key] = stripHugeText(String(slim.lorebook[key] || ''), 2000);
-        });
-    }
-    slim.systemPrompt = stripHugeText(slim.systemPrompt, 12000);
-    slim.openingText = stripHugeText(slim.openingText, 8000);
-    slim.storyBackground = stripHugeText(slim.storyBackground, 8000);
     return slim;
 }
 
-function slimSessionForCloud(session) {
+function stripDisposableSessionData(session) {
     if (!session || typeof session !== 'object') return session;
     const slim = { ...session };
-    slim.history = Array.isArray(session.history) ? session.history.map(slimHistoryEntry) : [];
+    slim.history = stripHistorySnapshots(session.history);
     slim.cards = undefined;
     slim.preTurnSnapshot = undefined;
-    if (typeof slim.backgroundMemory === 'string') slim.backgroundMemory = stripHugeText(slim.backgroundMemory, 6000);
-    if (typeof slim.storyBackground === 'string') slim.storyBackground = stripHugeText(slim.storyBackground, 8000);
-    if (typeof slim.systemPromptText === 'string') slim.systemPromptText = stripHugeText(slim.systemPromptText, 12000);
-    if (typeof slim.openingText === 'string') slim.openingText = stripHugeText(slim.openingText, 8000);
-    if (typeof slim.charInfo === 'string') slim.charInfo = stripHugeText(slim.charInfo, 6000);
-    if (typeof slim.worldSetting === 'string') slim.worldSetting = stripHugeText(slim.worldSetting, 6000);
+    delete slim.avatarDataUrl;
+    if (typeof slim.avatar === 'string' && slim.avatar.startsWith('data:') && slim.avatar.length > 12000) {
+        slim.avatar = '📜';
+    }
     return slim;
+}
+
+function buildStorageSnapshot(snapshot) {
+    const stored = JSON.parse(JSON.stringify(snapshot));
+    stored.cards = Array.isArray(stored.cards) ? stored.cards.map(stripDisposableCardData) : [];
+    stored.sessions = Array.isArray(stored.sessions) ? stored.sessions.map(stripDisposableSessionData) : [];
+    return stored;
 }
 
 function buildCloudSnapshot(snapshot) {
-    const cloud = JSON.parse(JSON.stringify(snapshot));
-    cloud.cards = Array.isArray(cloud.cards) ? cloud.cards.map(slimCardForCloud) : [];
-    cloud.sessions = Array.isArray(cloud.sessions) ? cloud.sessions.map(slimSessionForCloud) : [];
-    return cloud;
+    return buildStorageSnapshot(snapshot);
+}
+
+async function saveSnapshotToLocal(key, snapshot) {
+    const dataKey = 'hat_data_' + key;
+    const metaKey = 'hat_data_meta_' + key;
+    const storedSnapshot = buildStorageSnapshot(snapshot);
+    try {
+        await idbSet(dataKey, JSON.stringify(storedSnapshot));
+        localStorage.setItem(metaKey, String(Date.now()));
+        return true;
+    } catch (error) {
+        console.warn('IndexedDB save failed, falling back to localStorage:', error);
+    }
+
+    pruneUserBackups();
+    if (safeSetLocalStorage(dataKey, JSON.stringify(storedSnapshot))) {
+        localStorage.setItem(metaKey, String(Date.now()));
+        return true;
+    }
+    return false;
 }
 
 export async function saveLocalData() {
@@ -297,11 +500,9 @@ export async function saveLocalData() {
     const activeSession = snapshot.sessions?.find(session => session.id === currentSessionId) || gameConfig;
     if (activeSession) saveLiveSessionSnapshot(activeSession);
 
-    try {
-        localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
-        localStorage.setItem('hat_data_meta_' + key, String(Date.now()));
-    } catch (e) {
-        console.error('Local save failed:', e);
+    if (!(await saveSnapshotToLocal(key, snapshot))) {
+        console.error('Local save failed: storage quota exceeded after compaction.');
+        showToast('\u672c\u5730\u5b58\u50a8\u7a7a\u95f4\u4e0d\u8db3\uff0c\u5df2\u5c1d\u8bd5\u538b\u7f29\u5b58\u6863\u3002\u8bf7\u5bfc\u51fa\u5907\u4efd\u540e\u6e05\u7406\u8fc7\u65e7\u5b58\u6863\u3002', 'error', 9000);
     }
 
     if (!(isCloudAvailable && tcbAuth && tcbDb)) {
@@ -311,23 +512,7 @@ export async function saveLocalData() {
     const cloudSnapshot = buildCloudSnapshot(snapshot);
     const payload = { gameData: cloudSnapshot, updateTime: Date.now() };
     const cloudKey = getCloudKey();
-    publishCloudSaveStatus('syncing');
-    cloudSaveChain = cloudSaveChain.catch(() => {}).then(async () => {
-        if (!isCloudAvailable || !tcbAuth || !tcbDb) return;
-        try {
-            if (!tcbAuth.hasLoginState()) await tcbAuth.anonymousAuthProvider().signIn();
-            await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
-            if (payload.updateTime) {
-                localStorage.setItem('hat_last_cloud_save_' + key, String(payload.updateTime));
-            }
-            publishCloudSaveStatus('saved');
-        } catch (e) {
-            console.error('Cloud save failed:', e);
-            publishCloudSaveStatus('error', e.message || String(e));
-            showToast('云端保存失败，已只保存在本地：' + (e.message || String(e)), 'warning', 6000);
-        }
-    });
-    return cloudSaveChain;
+    return queueCloudSave(payload, cloudKey, key);
 }
 
 // Synchronous fallback for pagehide/beforeunload, where async work may be cut off.
@@ -337,11 +522,13 @@ export function flushLocalData() {
     if (!snapshot) return;
     const activeSession = snapshot.sessions?.find(session => session.id === currentSessionId) || gameConfig;
     if (activeSession) saveLiveSessionSnapshot(activeSession);
-    try {
-        localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
+    const storedSnapshot = buildStorageSnapshot(snapshot);
+    idbSet('hat_data_' + key, JSON.stringify(storedSnapshot)).catch(error => console.warn('IndexedDB flush failed:', error));
+    if (safeSetLocalStorage('hat_data_' + key, JSON.stringify(storedSnapshot))) {
         localStorage.setItem('hat_data_meta_' + key, String(Date.now()));
-    } catch (e) {
-        console.error('Local flush failed:', e);
+    } else {
+        pruneUserBackups();
+        console.warn('Local flush fallback skipped because localStorage is full; IndexedDB save is pending.');
     }
 }
 
