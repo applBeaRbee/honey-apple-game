@@ -453,7 +453,7 @@ export async function sendToAI(mailData = null) {
         });
         gameConfig.lastUpdated = Date.now();
         afterTurnBookkeeping(gameConfig, { reason: isMail ? '信件' : '剧情回合' });
-        saveLocalData();
+        await saveLocalData();
         renderSidebarSessions();
     } catch (e) {
         if (!isMail && lid && document.getElementById(lid)) document.getElementById(lid).remove();

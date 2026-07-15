@@ -44,6 +44,63 @@ function applyStoredData(parsed) {
     });
 }
 
+function sessionBackupKey(sessionId) {
+    return `hat_session_backup_${getStorageKey()}_${sessionId}`;
+}
+
+function buildSessionRecovery(session) {
+    if (!session?.id) return null;
+    const fields = [
+        'id', 'cardId', 'name', 'avatar', 'avatarDataUrl', 'lastUpdated',
+        'history', 'panels', 'originalPanels', 'customPanels', 'backgroundMemory',
+        'memoryDb', 'memoryTiers', 'worldTime', 'ambient', 'mailbox', 'gallery',
+        'worldState', 'worldline', 'undoStack', 'lorebook', 'difyConversationId',
+        'authorsNote'
+    ];
+    const recovery = {};
+    fields.forEach(field => {
+        if (session[field] !== undefined) recovery[field] = session[field];
+    });
+    return recovery;
+}
+
+function saveSessionBackups(sessions = []) {
+    sessions.forEach(session => {
+        if (!session?.id) return;
+        const recovery = buildSessionRecovery(session);
+        if (!recovery) return;
+        try {
+            localStorage.setItem(sessionBackupKey(session.id), JSON.stringify({
+                session: recovery,
+                updatedAt: Number(session.lastUpdated || Date.now())
+            }));
+        } catch (error) {
+            console.warn('Session backup failed:', error);
+        }
+    });
+}
+
+function restoreSessionBackups(sessions = []) {
+    const byId = new Map(sessions.filter(Boolean).map(session => [session.id, session]));
+    const prefix = `hat_session_backup_${getStorageKey()}_`;
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (!key?.startsWith(prefix)) continue;
+        try {
+            const backup = JSON.parse(localStorage.getItem(key) || '');
+            const session = backup?.session;
+            if (!session?.id) continue;
+            const existing = byId.get(session.id);
+            if (!existing || Number(backup.updatedAt || session.lastUpdated || 0) > Number(existing.lastUpdated || 0)) {
+                byId.set(session.id, session);
+            }
+        } catch (_) {
+            // Ignore damaged backups and continue restoring other sessions.
+        }
+    }
+    return [...byId.values()];
+}
+
 export async function loadLocalData() {
     let loadedFromCloud = false;
     const key = getStorageKey();
@@ -70,9 +127,16 @@ export async function loadLocalData() {
     }
     if (!loadedFromCloud) {
         if (localParsed) {
+            localParsed.sessions = restoreSessionBackups(localParsed.sessions || []);
             applyStoredData(localParsed);
         } else {
             setAppState({ cards: [], sessions: [], settings: { ...DEFAULT_SETTINGS } });
+        }
+    }
+    if (loadedFromCloud) {
+        const recoveredSessions = restoreSessionBackups(appState.sessions || []);
+        if (recoveredSessions.some((session, index) => session !== appState.sessions[index]) || recoveredSessions.length !== appState.sessions.length) {
+            appState.sessions = recoveredSessions;
         }
     }
     return true;
@@ -91,6 +155,7 @@ export async function saveLocalData() {
     const key = getStorageKey();
     const snapshot = snapshotAppState();
     if (!snapshot) return;
+    saveSessionBackups(snapshot.sessions || []);
 
     try {
         localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
@@ -120,6 +185,7 @@ export function flushLocalData() {
     const key = getStorageKey();
     const snapshot = snapshotAppState();
     if (!snapshot) return;
+    saveSessionBackups(snapshot.sessions || []);
     try {
         localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
         localStorage.setItem('hat_data_meta_' + key, String(Date.now()));
