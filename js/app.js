@@ -1,7 +1,7 @@
 // ================= 应用入口 =================
 // 导入所有模块以注册其功能
 import { appState, gameConfig, currentUser } from './state.js';
-import { loadLocalData, initCloudBase, saveLocalData } from './storage.js';
+import { loadLocalData, initCloudBase, saveLocalData, flushLocalData } from './storage.js';
 import { renderLibrary, createDefaultCard, openCardEditor, saveCardEditor, deleteCard, duplicateCard } from './cards.js';
 import { renderSidebarSessions, updateUserUI, switchMainView, toggleSidebar, switchMobileGameTab, openSessionSetup, startSessionFromSetup, resumeSession, deleteSession, openSessionEditModal } from './sessions.js';
 import { renderGamePanelsUI, switchGamePanelTab, deleteCustomPanel, addListItem, removeListItem, openAddPropertyModal, confirmAddProperty, openEditPropertyModal, confirmEditProperty, deleteProperty, openEditListItemModal, confirmEditListItem, openAddCustomPanelModal, confirmAddCustomPanel, openLegendaryItem } from './panels.js';
@@ -58,6 +58,13 @@ window.onload = async function() {
                 mobileNav.style.display = 'none';
             }
         }
+    });
+
+    const persistBeforeLeaving = () => flushLocalData();
+    window.addEventListener('pagehide', persistBeforeLeaving);
+    window.addEventListener('beforeunload', persistBeforeLeaving);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') persistBeforeLeaving();
     });
 
     console.log('🍎 蜂蜜苹果酒馆 v2.0 - 模块化重构完成');

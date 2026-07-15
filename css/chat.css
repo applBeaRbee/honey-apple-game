@@ -366,3 +366,30 @@
     opacity: 0.7;
     margin-top: 2px;
 }
+
+/* Mailbox thread */
+.mail-contact {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border: 0;
+    border-left: 3px solid transparent;
+    background: transparent;
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+}
+.mail-contact:hover,
+.mail-contact.active {
+    background: var(--bg-card);
+    border-left-color: var(--color-primary);
+}
+.mail-contact-icon { color: var(--color-primary); }
+.mail-thread-title { padding: 8px; font-weight: 700; border-bottom: 1px solid var(--border-color); }
+.mail-empty { padding: 20px 12px; color: var(--text-muted); text-align: center; }
+.mail-message { margin: 0 0 8px; padding: 9px 10px; border: 1px solid var(--border-color); border-radius: 5px; line-height: 1.55; }
+.mail-message.incoming { background: var(--bg-panel); }
+.mail-message.outgoing { background: var(--bg-chat-user); margin-left: 12%; }
+.mail-message-meta { margin-bottom: 3px; color: var(--text-muted); font-size: 0.7rem; }

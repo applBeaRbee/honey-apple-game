@@ -1,63 +1,112 @@
-// ================= 语音输入系统 =================
+// ================= Voice input =================
+import { showToast } from './ui.js';
+
 export let isRecording = false;
 let recognition = null;
-let onResultCallback = null;
+let isSupported = false;
+let finalTranscript = '';
+let interimTranscript = '';
+let activePointerId = null;
+
+function updateVoiceButton(recording = isRecording) {
+    const btn = document.getElementById('btnVoice');
+    if (!btn) return;
+    btn.classList.toggle('recording', recording);
+    btn.setAttribute('aria-pressed', String(recording));
+    btn.title = recording ? '松开结束语音输入' : '按住或点击开始语音输入';
+}
+
+function writeTranscript() {
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    const text = `${finalTranscript}${interimTranscript}`.trim();
+    if (!text) return;
+    input.value = input.value.trim() ? `${input.value.trim()} ${text}` : text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    finalTranscript = '';
+    interimTranscript = '';
+}
+
+function finishRecognition() {
+    writeTranscript();
+    isRecording = false;
+    activePointerId = null;
+    updateVoiceButton(false);
+}
 
 export function setupVoiceEvents() {
     const btn = document.getElementById('btnVoice');
-    if (!btn) return;
+    if (!btn || btn.dataset.voiceBound === 'true') return;
+    btn.dataset.voiceBound = 'true';
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         btn.disabled = true;
-        btn.title = '浏览器不支持语音输入';
+        btn.title = '当前浏览器不支持语音输入，请使用 Chrome 或 Edge';
         return;
     }
+    isSupported = true;
     recognition = new SpeechRecognition();
     recognition.lang = 'zh-CN';
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        const input = document.getElementById('chatInput');
-        if (input) {
-            input.value = transcript;
-            if (onResultCallback) onResultCallback(transcript);
+    recognition.onstart = () => { isRecording = true; updateVoiceButton(true); };
+    recognition.onresult = event => {
+        interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const text = event.results[i][0]?.transcript || '';
+            if (event.results[i].isFinal) finalTranscript += text;
+            else interimTranscript += text;
         }
-        stopRecording();
+        const input = document.getElementById('chatInput');
+        if (input) input.placeholder = interimTranscript ? `识别中：${interimTranscript}` : '写下你的决定...';
     };
-    recognition.onerror = () => stopRecording();
-    recognition.onend = () => {
-        if (isRecording) stopRecording();
+    recognition.onerror = event => {
+        if (event.error !== 'aborted' && event.error !== 'no-speech') showToast(`语音输入失败：${event.error}`, 'warning', 4000);
+        finishRecognition();
     };
+    recognition.onend = () => { if (isRecording) finishRecognition(); };
 
-    // 按住录音
-    btn.addEventListener('mousedown', (e) => { e.preventDefault(); startRecording(); });
-    btn.addEventListener('mouseup', (e) => { e.preventDefault(); stopRecording(); });
-    btn.addEventListener('mouseleave', () => stopRecording());
-    btn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); }, { passive: false });
-    btn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); }, { passive: false });
+    btn.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        activePointerId = event.pointerId;
+        btn.setPointerCapture?.(event.pointerId);
+        startRecording();
+    });
+    btn.addEventListener('pointerup', event => {
+        if (activePointerId !== event.pointerId) return;
+        event.preventDefault();
+        stopRecording();
+    });
+    btn.addEventListener('pointercancel', stopRecording);
+    btn.addEventListener('lostpointercapture', () => { if (isRecording) stopRecording(); });
+    btn.addEventListener('click', event => {
+        if (event.detail === 0) isRecording ? stopRecording() : startRecording();
+    });
 }
 
 export function startRecording() {
-    if (!recognition || isRecording) return;
+    if (!isSupported || !recognition || isRecording) return;
+    finalTranscript = '';
+    interimTranscript = '';
     try {
         recognition.start();
         isRecording = true;
-        const btn = document.getElementById('btnVoice');
-        if (btn) btn.classList.add('recording');
-    } catch (e) { /* ignore */ }
+        updateVoiceButton(true);
+    } catch (e) {
+        if (e.name !== 'InvalidStateError') showToast('无法启动语音识别，请检查麦克风权限', 'warning');
+    }
 }
 
 export function stopRecording() {
     if (!recognition || !isRecording) return;
-    try { recognition.stop(); } catch (e) { /* ignore */ }
+    writeTranscript();
+    try { recognition.stop(); } catch (_) { finishRecognition(); }
     isRecording = false;
-    const btn = document.getElementById('btnVoice');
-    if (btn) btn.classList.remove('recording');
+    updateVoiceButton(false);
+    const input = document.getElementById('chatInput');
+    if (input) input.placeholder = '写下你的决定...';
 }
 
-export function setVoiceResultCallback(callback) {
-    onResultCallback = callback;
-}
+window.startRecording = startRecording;
+window.stopRecording = stopRecording;

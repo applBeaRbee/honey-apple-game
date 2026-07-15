@@ -14,6 +14,8 @@ import { preloadTavernImage } from './image-gen.js';
 import { buildMemoryContext, updateMemoryFromAIResponse, extractMemoryFromMessage } from './memory.js';
 import { ensureLiyuanData, afterTurnBookkeeping, buildLiyuanContext, createDirectorCard, shouldSuggestDirectorCard, getOpenDirectorCards } from './world-state.js';
 
+let forceSyncBusy = false;
+
 function normalizeChatApiUrl(url) {
     if (!url) return '';
     let clean = url.trim().replace(/\/+$/, '');
@@ -245,6 +247,10 @@ export async function sendToAI(mailData = null) {
         worldTime: timeSnapshot,
         preTurnSnapshot
     });
+    gameConfig.lastUpdated = Date.now();
+    const session = appState.sessions?.find(item => item.id === gameConfig.id);
+    if (session) session.lastUpdated = gameConfig.lastUpdated;
+    saveLocalData();
 
     // ===== 从用户输入提取记忆 =====
     extractMemoryFromMessage(userText, '');
@@ -453,6 +459,7 @@ export async function sendToAI(mailData = null) {
         if (!isMail && lid && document.getElementById(lid)) document.getElementById(lid).remove();
         gameConfig.history.pop();
         restoreStateSnapshot(preTurnSnapshot);
+        saveLocalData();
         if (e.status === 429) {
             const seconds = setOpenCodeCooldown(e.retryAfter);
             showToast(`OpenCode 当前触发速率限制，请约 ${seconds} 秒后再试。免费模型高峰期很容易这样。`, "warning", 8000);
@@ -469,13 +476,16 @@ export async function sendToAI(mailData = null) {
     }
 }
 
-export async function forceSyncPanels() {
+async function forceSyncPanelsInternal() {
+    if (forceSyncBusy) return showToast('强刷正在进行中，请等待当前检查完成', 'warning');
     const isDify = appState.settings.engineType === 'dify';
     if (isDify && !appState.settings.difyApiKey) return showToast("未配置 Dify 密钥", "error");
     if (!isDify && !appState.settings.apiKey) return showToast("未配置 API 密钥", "error");
     if (!isDify && guardOpenCodeCooldown()) return;
     if (!gameConfig) return showToast("配置缺失", "error");
 
+    forceSyncBusy = true;
+    const syncSnapshot = createStateSnapshot('force-sync');
     showToast("强制洞察全文检查中...", "info", 5000);
     try {
         let answer = "";
@@ -553,12 +563,18 @@ ${transcript}
                 updateAmbientEnvironment(gameConfig.ambient);
             }
             renderGamePanelsUI();
-            saveLocalData();
+            gameConfig.lastUpdated = Date.now();
+            await saveLocalData();
             showToast("强制洞察完成", "success");
         } else {
             showToast("面板重构响应格式异常", "error");
         }
     } catch (e) {
+        if (syncSnapshot) {
+            restoreStateSnapshot(syncSnapshot);
+            renderGamePanelsUI();
+            await saveLocalData();
+        }
         if (e.status === 429) {
             const seconds = setOpenCodeCooldown(e.retryAfter);
             showToast(`OpenCode 当前触发速率限制，请约 ${seconds} 秒后再试。`, "warning", 8000);
@@ -570,4 +586,13 @@ ${transcript}
 
 // ===== 瀵煎嚭鍒?window =====
 window.sendToAI = sendToAI;
+export async function forceSyncPanels() {
+    if (forceSyncBusy) return showToast('强刷正在进行中，请等待当前检查完成', 'warning');
+    try {
+        return await forceSyncPanelsInternal();
+    } finally {
+        forceSyncBusy = false;
+    }
+}
+
 window.forceSyncPanels = forceSyncPanels;

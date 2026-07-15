@@ -1,10 +1,17 @@
-// ================= 数据持久化 =================
-import { appState, currentUser, isLocalFile, isCloudAvailable, tcbApp, tcbAuth, tcbDb, getStorageKey, getCloudKey, setCloudAvailable, setTcbApp, setTcbAuth, setTcbDb, setAppState } from './state.js';
+// ================= Data persistence =================
+import { appState, isLocalFile, isCloudAvailable, tcbApp, tcbAuth, tcbDb, getStorageKey, getCloudKey, setCloudAvailable, setTcbApp, setTcbAuth, setTcbDb, setAppState } from './state.js';
 import { DEFAULT_SETTINGS } from './constants.js';
 import { showToast } from './ui.js';
 
+// Save immutable snapshots in order. A slow older cloud request must not
+// overwrite a newer conversation state.
+let cloudSaveChain = Promise.resolve();
+
 export async function initCloudBase() {
-    if (isLocalFile) { console.warn("file:// 协议运行，禁用云端，沙盒模式。"); return; }
+    if (isLocalFile) {
+        console.warn('file:// mode: cloud storage is disabled.');
+        return;
+    }
     try {
         if (typeof cloudbase !== 'undefined') {
             const app = cloudbase.init({ env: 'applbear-d7gnceygaed0ac177' });
@@ -13,11 +20,11 @@ export async function initCloudBase() {
             setTcbDb(app.database());
             setCloudAvailable(true);
         } else {
-            console.warn("CloudBase SDK 未加载，降级本地沙盒。");
+            console.warn('CloudBase SDK is unavailable; using local storage.');
             setCloudAvailable(false);
         }
     } catch (e) {
-        console.warn("云环境初始化失败，降级本地沙盒:", e);
+        console.warn('CloudBase initialization failed; using local storage.', e);
         setCloudAvailable(false);
     }
 }
@@ -29,74 +36,95 @@ export function normalizeCloudDocData(res) {
     return null;
 }
 
+function applyStoredData(parsed) {
+    setAppState({
+        cards: parsed.cards || [],
+        sessions: parsed.sessions || [],
+        settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) }
+    });
+}
+
 export async function loadLocalData() {
     let loadedFromCloud = false;
     const key = getStorageKey();
+    const localSaved = localStorage.getItem('hat_data_' + key);
+    const localUpdatedAt = Number(localStorage.getItem('hat_data_meta_' + key) || 0);
+    let localParsed = null;
+    if (localSaved) {
+        try { localParsed = JSON.parse(localSaved); } catch (e) { localParsed = null; }
+    }
     if (isCloudAvailable && tcbAuth && tcbDb) {
         try {
-            if (!tcbAuth.hasLoginState()) {
-                await tcbAuth.anonymousAuthProvider().signIn().catch(err => { throw new Error("匿名登录未开启"); });
-            }
-            const cloudKey = getCloudKey();
-            const res = await tcbDb.collection('hat_saves').doc(cloudKey).get();
+            if (!tcbAuth.hasLoginState()) await tcbAuth.anonymousAuthProvider().signIn();
+            const res = await tcbDb.collection('hat_saves').doc(getCloudKey()).get();
             const doc = normalizeCloudDocData(res);
-            if (doc?.gameData) {
-                const parsed = doc.gameData;
-                setAppState({
-                    cards: parsed.cards || [],
-                    sessions: parsed.sessions || [],
-                    settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) }
-                });
+            if (doc?.gameData && Number(doc.updateTime || 0) >= localUpdatedAt) {
+                applyStoredData(doc.gameData);
                 loadedFromCloud = true;
             }
         } catch (e) {
-            console.error("云端加载失败:", e);
+            console.error('Cloud load failed:', e);
             setCloudAvailable(false);
-            showToast('云端同步失败，降级本地', 'error');
+            showToast('Cloud sync failed; switched to local storage.', 'error');
         }
     }
     if (!loadedFromCloud) {
-        const saved = localStorage.getItem('hat_data_' + key);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                setAppState({
-                    cards: parsed.cards || [],
-                    sessions: parsed.sessions || [],
-                    settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) }
-                });
-            } catch (e) {
-                setAppState({ cards: [], sessions: [], settings: { ...DEFAULT_SETTINGS } });
-            }
+        if (localParsed) {
+            applyStoredData(localParsed);
         } else {
             setAppState({ cards: [], sessions: [], settings: { ...DEFAULT_SETTINGS } });
         }
     }
-    // 返回 true 表示加载完成，由调用方后续执行 UI 渲染
     return true;
+}
+
+function snapshotAppState() {
+    try {
+        return JSON.parse(JSON.stringify(appState));
+    } catch (e) {
+        console.error('Could not snapshot app state:', e);
+        return null;
+    }
 }
 
 export async function saveLocalData() {
     const key = getStorageKey();
+    const snapshot = snapshotAppState();
+    if (!snapshot) return;
+
     try {
-        localStorage.setItem('hat_data_' + key, JSON.stringify(appState));
+        localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
+        localStorage.setItem('hat_data_meta_' + key, String(Date.now()));
     } catch (e) {
-        console.error("本地保存失败:", e);
+        console.error('Local save failed:', e);
     }
-    if (isCloudAvailable && tcbAuth && tcbDb) {
+
+    if (!(isCloudAvailable && tcbAuth && tcbDb)) return;
+    const payload = { gameData: snapshot, updateTime: Date.now() };
+    const cloudKey = getCloudKey();
+    cloudSaveChain = cloudSaveChain.catch(() => {}).then(async () => {
+        if (!isCloudAvailable || !tcbAuth || !tcbDb) return;
         try {
-            if (!tcbAuth.hasLoginState()) {
-                await tcbAuth.anonymousAuthProvider().signIn();
-            }
-            const cloudKey = getCloudKey();
-            await tcbDb.collection('hat_saves').doc(cloudKey).set({
-                gameData: JSON.parse(JSON.stringify(appState)),
-                updateTime: Date.now()
-            });
+            if (!tcbAuth.hasLoginState()) await tcbAuth.anonymousAuthProvider().signIn();
+            await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
         } catch (e) {
-            console.error('云端保存失败:', e);
+            console.error('Cloud save failed:', e);
             setCloudAvailable(false);
         }
+    });
+    return cloudSaveChain;
+}
+
+// Synchronous fallback for pagehide/beforeunload, where async work may be cut off.
+export function flushLocalData() {
+    const key = getStorageKey();
+    const snapshot = snapshotAppState();
+    if (!snapshot) return;
+    try {
+        localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
+        localStorage.setItem('hat_data_meta_' + key, String(Date.now()));
+    } catch (e) {
+        console.error('Local flush failed:', e);
     }
 }
 
@@ -112,15 +140,15 @@ export async function checkCloudStorageStatus() {
         message: ''
     };
     if (isLocalFile) {
-        status.message = '当前是 file:// 打开，云端存储会被禁用。请用 http://localhost 访问。';
+        status.message = 'file:// mode disables cloud storage.';
         return status;
     }
     if (!status.sdkLoaded) {
-        status.message = 'CloudBase SDK 未加载，可能是网络或脚本 CDN 被拦截。';
+        status.message = 'CloudBase SDK is unavailable.';
         return status;
     }
     if (!tcbAuth || !tcbDb) {
-        status.message = 'CloudBase 尚未初始化。';
+        status.message = 'CloudBase is not initialized.';
         return status;
     }
     try {
@@ -128,12 +156,10 @@ export async function checkCloudStorageStatus() {
         const docId = '__health_check';
         const payload = { ping: Date.now(), source: 'hat_health_check' };
         await tcbDb.collection('hat_saves').doc(docId).set(payload);
-        const res = await tcbDb.collection('hat_saves').doc(docId).get();
-        const doc = normalizeCloudDocData(res);
+        const doc = normalizeCloudDocData(await tcbDb.collection('hat_saves').doc(docId).get());
         status.ok = !!doc && doc.source === payload.source;
-        status.message = status.ok ? '云端读写正常。' : '云端写入后读取结果异常。';
+        status.message = status.ok ? 'Cloud read/write is working.' : 'Cloud verification failed.';
     } catch (error) {
-        status.ok = false;
         status.message = error.message || String(error);
     }
     return status;

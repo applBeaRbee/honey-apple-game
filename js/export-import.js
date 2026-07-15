@@ -619,3 +619,86 @@ window.openGameSettingsModal = openGameSettingsModal;
 window.saveGameSettings = saveGameSettings;
 window.openLorebookModal = openLorebookModal;
 window.saveLorebook = saveLorebook;
+
+// Robust import handlers kept separate from the legacy parser above.
+async function importDataV2(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+        const data = JSON.parse(await file.text());
+        if (!data || !Array.isArray(data.cards) || !data.cards.length) throw new Error('文件中没有可导入的卡片');
+        const cardIdMap = new Map();
+        let imported = 0;
+        data.cards.forEach(source => {
+            if (!source || typeof source !== 'object' || !source.name) return;
+            const existing = appState.cards.find(card => card.name === source.name && card.storyBackground === source.storyBackground);
+            if (existing) {
+                if (source.id) cardIdMap.set(source.id, existing.id);
+                return;
+            }
+            const card = { ...source, id: generateId('card'), created: source.created || Date.now(), updated: Date.now() };
+            if (source.id) cardIdMap.set(source.id, card.id);
+            appState.cards.unshift(card);
+            imported++;
+        });
+        let sessionsImported = 0;
+        if (Array.isArray(data.sessions)) data.sessions.forEach(source => {
+            const cardId = cardIdMap.get(source?.cardId) || source?.cardId;
+            if (!source || !cardId || !appState.cards.some(card => card.id === cardId)) return;
+            if (appState.sessions.some(session => session.name === source.name && session.cardId === cardId)) return;
+            appState.sessions.unshift({ ...source, id: generateId('sess'), cardId, lastUpdated: source.lastUpdated || Date.now() });
+            sessionsImported++;
+        });
+        await saveLocalData();
+        renderLibrary();
+        renderSidebarSessions();
+        showToast(`导入成功：${imported} 张卡片${sessionsImported ? `，${sessionsImported} 个存档` : ''}`, 'success');
+    } catch (error) {
+        showToast('导入失败：' + error.message, 'error');
+    } finally {
+        event.target.value = '';
+    }
+}
+
+async function handleDiaryImportV2(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!gameConfig) {
+        event.target.value = '';
+        return showToast('请先进入一个存档再导入日志', 'warning');
+    }
+    try {
+        const imported = [];
+        let pendingTime = null;
+        const text = (await file.text()).replace(/\r/g, '');
+        text.split('\n').forEach(rawLine => {
+            let line = rawLine.trim();
+            if (!line) return;
+            const timeMatch = line.match(/^\[?第?\s*(\d+)\s*天[^\d]*(\d{1,2}):(\d{2})\]?\s*/);
+            if (timeMatch) {
+                pendingTime = { day: Number(timeMatch[1]), hour: Number(timeMatch[2]), minute: Number(timeMatch[3]) };
+                line = line.slice(timeMatch[0].length).trim();
+            }
+            if (!line) return;
+            const match = line.match(/^(玩家|我|AI|DM|旁白|[^:：]{1,30})\s*[:：]\s*(.+)$/);
+            const role = match && /^(AI|DM|旁白)$/i.test(match[1]) ? 'assistant' : 'user';
+            const content = match ? match[2].trim() : line;
+            if (content) imported.push({ role, content, ...(pendingTime ? { worldTime: { ...pendingTime } } : {}) });
+        });
+        if (!imported.length) throw new Error('没有识别到有效的日志内容');
+        gameConfig.history ||= [];
+        gameConfig.history.push(...imported);
+        gameConfig.lastUpdated = Date.now();
+        await saveLocalData();
+        window.rebuildChatHistoryUI?.();
+        renderSidebarSessions();
+        showToast(`日志导入成功：${imported.length} 条消息`, 'success');
+    } catch (error) {
+        showToast('日志导入失败：' + error.message, 'error');
+    } finally {
+        event.target.value = '';
+    }
+}
+
+window.importData = importDataV2;
+window.handleDiaryImport = handleDiaryImportV2;
