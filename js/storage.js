@@ -302,10 +302,9 @@ export async function saveLocalData() {
         try {
             if (!tcbAuth.hasLoginState()) await tcbAuth.anonymousAuthProvider().signIn();
             await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
-            try {
-                const sizeKb = Math.round(JSON.stringify(payload).length / 1024);
-                if (sizeKb > 500) showToast(`云端保存已瘦身，但仍然较大（约 ${sizeKb}KB）`, 'warning', 4000);
-            } catch (_) {}
+            if (payload.updateTime) {
+                localStorage.setItem('hat_last_cloud_save_' + key, String(payload.updateTime));
+            }
         } catch (e) {
             console.error('Cloud save failed:', e);
             showToast('云端保存失败，已只保存在本地：' + (e.message || String(e)), 'warning', 6000);

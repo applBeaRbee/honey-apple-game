@@ -148,15 +148,32 @@ function looksLikePanelPatch(parsed) {
 function mergePanelUpdates(panelPatch, options = {}) {
     if (!isPlainObject(panelPatch) || !gameConfig?.panels) return false;
     let changed = false;
+    const metaKeys = new Set([
+        'pass_time', 'time_passed', 'elapsed_minutes', 'elapsedMinutes',
+        'world_time', 'worldTime', 'current_time', 'currentTime',
+        'memory_db', 'memoryDb', 'backgroundMemory', 'ambient', 'actions',
+        'new_mails', 'new_mails_count', 'new_gallery', 'cg_cutin', 'director_card',
+        'active_characters', 'nearby_characters', 'activeCharacters', 'nearbyCharacters',
+        'panel_order', 'panelOrder', 'relation_web', 'map_data', 'mapData'
+    ]);
     for (const [panelName, patch] of Object.entries(panelPatch)) {
-        if (/^(pass|world|current|time|ambient|memory|new|active|nearby|director|panel|map|relation|character)/i.test(panelName)) continue;
+        if (metaKeys.has(panelName)) continue;
         if (patch === undefined || patch === null) continue;
-        if (!gameConfig.panels[panelName]) {
-            gameConfig.panels[panelName] = patch;
+        const safeName = String(panelName || '').trim();
+        if (!safeName) continue;
+        if (!gameConfig.panels[safeName]) {
+            gameConfig.panels[safeName] = patch;
             changed = true;
             continue;
         }
-        gameConfig.panels[panelName] = mergeValue(gameConfig.panels[panelName], patch);
+        const current = gameConfig.panels[safeName];
+        if (Array.isArray(current) && Array.isArray(patch)) {
+            gameConfig.panels[safeName] = mergeArray(current, patch);
+        } else if (isPlainObject(current) && isPlainObject(patch)) {
+            gameConfig.panels[safeName] = mergeValue(current, patch);
+        } else {
+            gameConfig.panels[safeName] = patch;
+        }
         changed = true;
     }
     if (changed && options.preserve !== false) preserveSpecialPanels(gameConfig.panels);
