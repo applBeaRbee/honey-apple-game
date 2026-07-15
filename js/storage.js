@@ -209,7 +209,6 @@ export async function saveLocalData() {
     const key = getStorageKey();
     const snapshot = snapshotAppState();
     if (!snapshot) return;
-    saveSessionBackups(snapshot.sessions || []);
     const activeSession = snapshot.sessions?.find(session => session.id === currentSessionId) || gameConfig;
     if (activeSession) saveLiveSessionSnapshot(activeSession);
 
@@ -230,6 +229,7 @@ export async function saveLocalData() {
             await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
         } catch (e) {
             console.error('Cloud save failed:', e);
+            showToast('云端保存失败，已只保存在本地：' + (e.message || String(e)), 'warning', 6000);
             setCloudAvailable(false);
         }
     });
@@ -241,7 +241,6 @@ export function flushLocalData() {
     const key = getStorageKey();
     const snapshot = snapshotAppState();
     if (!snapshot) return;
-    saveSessionBackups(snapshot.sessions || []);
     const activeSession = snapshot.sessions?.find(session => session.id === currentSessionId) || gameConfig;
     if (activeSession) saveLiveSessionSnapshot(activeSession);
     try {
