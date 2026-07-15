@@ -104,6 +104,28 @@ export function normalizeMinutes(value, fallback = 10) {
     return fallback;
 }
 
+function inferElapsedMinutesSmart(text) {
+    if (!text) return 0;
+    const source = String(text);
+    const num = '[0-9\\u96f6\\u3007\\u4e00\\u4e8c\\u4e24\\u5169\\u4e09\\u56db\\u4e94\\u516d\\u4e03\\u516b\\u4e5d\\u5341]+';
+    const trigger = '(?:\\u7ecf\\u8fc7|\\u8fc7\\u53bb|\\u8fc7\\u4e86|\\u6301\\u7eed|\\u82b1\\u4e86|\\u8017\\u65f6|\\u7b49\\u4e86|\\u804a\\u4e86)';
+
+    if (new RegExp(trigger + '[\\s\\S]{0,6}\\u534a\\s*(?:\\u4e2a)?\\s*\\u5c0f\\u65f6').test(source)) return 30;
+
+    const unitMap = [
+        { pattern: '(?:\\u5929|\\u65e5)', scale: 1440 },
+        { pattern: '(?:\\u5c0f\\u65f6|\\u949f\\u5934)', scale: 60 },
+        { pattern: '(?:\\u5206\\u949f|\\u5206)', scale: 1 }
+    ];
+    for (const unit of unitMap) {
+        const match = source.match(new RegExp(trigger + '[\\s\\S]{0,8}?(' + num + ')\\s*' + unit.pattern));
+        if (!match) continue;
+        const amount = parseChineseNumberToken(match[1]);
+        if (Number.isFinite(amount) && amount > 0) return Math.round(amount * unit.scale);
+    }
+    return 0;
+}
+
 function parseClock(text) {
     if (!text) return null;
     const source = String(text);
@@ -126,13 +148,80 @@ function parseClock(text) {
     return candidate;
 }
 
+function parseChineseNumberToken(token) {
+    if (token === undefined || token === null) return null;
+    const raw = String(token).trim();
+    if (!raw) return null;
+    if (/^\d+$/.test(raw)) return Number(raw);
+    if (raw === '\u534a') return 30;
+    const map = {
+        '\u96f6': 0, '\u3007': 0, '\u4e00': 1, '\u4e8c': 2, '\u4e24': 2, '\u5169': 2,
+        '\u4e09': 3, '\u56db': 4, '\u4e94': 5, '\u516d': 6, '\u4e03': 7, '\u516b': 8, '\u4e5d': 9
+    };
+    if (raw.length === 1 && map[raw] !== undefined) return map[raw];
+    if (raw.includes('\u5341')) {
+        const [left, right] = raw.split('\u5341');
+        const tens = left ? map[left] : 1;
+        const ones = right ? map[right] : 0;
+        if (tens !== undefined && ones !== undefined) return tens * 10 + ones;
+    }
+    let value = 0;
+    for (const ch of raw) {
+        if (map[ch] === undefined) return null;
+        value = value * 10 + map[ch];
+    }
+    return value;
+}
+
+function normalizeClockParts(dayToken, period, hourToken, minuteToken) {
+    let hour = parseChineseNumberToken(hourToken);
+    if (!Number.isFinite(hour)) return null;
+    let minute = minuteToken ? parseChineseNumberToken(minuteToken) : 0;
+    if (!Number.isFinite(minute)) minute = 0;
+    if (minuteToken === '\u534a') minute = 30;
+    if (hour < 0 || hour > 24 || minute < 0 || minute >= 60) return null;
+
+    const p = period || '';
+    if (/\u4e0b\u5348|\u508d\u665a|\u665a\u4e0a|\u591c\u665a/.test(p) && hour < 12) hour += 12;
+    if (/\u6df1\u591c|\u51cc\u6668/.test(p) && hour === 12) hour = 0;
+    if (/\u4e2d\u5348/.test(p) && hour < 11) hour += 12;
+    if (hour === 24) hour = 0;
+
+    const current = getWorldTimeSnapshot();
+    const parsedDay = parseChineseNumberToken(dayToken);
+    let candidate = normalizeWorldTime({
+        day: Number.isFinite(parsedDay) && parsedDay > 0 ? parsedDay : current.day,
+        hour,
+        minute
+    });
+    if (!Number.isFinite(parsedDay) && worldTimeToMinutes(candidate) + 30 < worldTimeToMinutes(current)) {
+        candidate = normalizeWorldTime({ ...candidate, day: candidate.day + 1 });
+    }
+    return candidate;
+}
+
+function parseClockSmart(text) {
+    if (!text) return null;
+    const source = String(text);
+    const num = '[0-9\\u96f6\\u3007\\u4e00\\u4e8c\\u4e24\\u5169\\u4e09\\u56db\\u4e94\\u516d\\u4e03\\u516b\\u4e5d\\u5341]+';
+    const period = '(\\u51cc\\u6668|\\u65e9\\u4e0a|\\u6e05\\u6668|\\u4e0a\\u5348|\\u4e2d\\u5348|\\u4e0b\\u5348|\\u508d\\u665a|\\u665a\\u4e0a|\\u591c\\u665a|\\u6df1\\u591c)?';
+    const clockMark = '(?:[:\\uff1a]|\\u70b9|\\u65f6(?!\\u95f4|\\u5019|\\u957f|\\u5149))';
+
+    let match = source.match(new RegExp('(?:\\u7b2c\\s*)?(' + num + ')\\s*(?:\\u5929|\\u65e5)[\\s\\S]{0,16}?' + period + '\\s*(' + num + ')' + clockMark + '\\s*(' + num + '|\\u534a)?'));
+    if (match) return normalizeClockParts(match[1], match[2], match[3], match[4]);
+
+    match = source.match(new RegExp(period + '\\s*(' + num + ')' + clockMark + '\\s*(' + num + '|\\u534a)?'));
+    if (!match) return null;
+    return normalizeClockParts(null, match[1], match[2], match[3]);
+}
+
 export function parseWorldTime(value) {
     if (!value) return null;
     if (typeof value === 'object') {
         if (value.day !== undefined || value.hour !== undefined || value.minute !== undefined) return normalizeWorldTime(value);
         if (value.date || value.time) return parseWorldTime(`${value.date || ''} ${value.time || ''}`);
     }
-    return parseClock(value);
+    return parseClockSmart(value) || parseClock(value);
 }
 
 export function extractAbsoluteWorldTime(parsed = null, aiText = '') {
@@ -160,10 +249,12 @@ export function extractAbsoluteWorldTime(parsed = null, aiText = '') {
 export function inferPassTime(userText = '', aiText = '', parsed = null) {
     const explicit = parsed?.pass_time ?? parsed?.time_passed ?? parsed?.elapsed_minutes ?? parsed?.elapsedMinutes;
     if (explicit !== undefined) return normalizeMinutes(explicit, 0);
-    const absolute = extractAbsoluteWorldTime(parsed, '');
+    const absolute = extractAbsoluteWorldTime(parsed, aiText);
     if (absolute) return Math.max(0, worldTimeToMinutes(absolute) - worldTimeToMinutes(getWorldTimeSnapshot()));
 
-    const text = String(userText || '');
+    const text = `${userText || ''}\n${aiText || ''}`;
+    const smartElapsed = inferElapsedMinutesSmart(text);
+    if (smartElapsed > 0) return smartElapsed;
     if (/第二天|次日|翌日|一觉睡到|过夜|天亮/.test(text)) return 480;
     const elapsed = text.match(/(?:经过|过去|持续|花了|耗时)\s*(\d+(?:\.\d+)?)\s*(天|日|小时|时|分钟|分)/);
     if (elapsed) return normalizeMinutes(`${elapsed[1]}${elapsed[2]}`, 0);
@@ -176,7 +267,7 @@ export function applyTurnTime(userText = '', aiText = '', parsed = null, options
     const before = getWorldTimeSnapshot();
     if (options.advance === false) return { before, after: before, minutes: 0, changed: false };
 
-    const absolute = extractAbsoluteWorldTime(parsed, '');
+    const absolute = extractAbsoluteWorldTime(parsed, aiText);
     if (absolute) {
         const delta = Math.max(0, worldTimeToMinutes(absolute) - worldTimeToMinutes(before));
         gameConfig.worldTime = normalizeWorldTime(absolute);

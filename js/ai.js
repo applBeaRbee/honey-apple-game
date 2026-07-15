@@ -122,7 +122,7 @@ function mergeArray(existing, incoming) {
     for (const item of incoming) {
         if (isPlainObject(item)) {
             const key = item.id || item.name || item.title || item.subject;
-            const idx = key ? merged.findIndex(old => isPlainObject(old) && (old.id || old.name || old.title || old.subject) === key) : -1;
+            const idx = key ? merged.findIndex(old => isPlainObject(old) && ((old.id || old.name || old.title || old.subject) === key)) : -1;
             if (idx >= 0) merged[idx] = mergeValue(merged[idx], item);
             else merged.push(item);
         } else if (!merged.includes(item)) {
@@ -140,9 +140,51 @@ function looksLikePanelPatch(parsed) {
         'memory_db', 'memoryDb', 'backgroundMemory', 'ambient', 'actions',
         'new_mails', 'new_mails_count', 'new_gallery', 'cg_cutin', 'director_card',
         'active_characters', 'nearby_characters', 'activeCharacters', 'nearbyCharacters',
-        'panel_order', 'panelOrder', 'relation_web', 'map_data', 'mapData'
+        'panel_order', 'panelOrder', 'relation_web', 'map_data', 'mapData',
+        'updates', 'changes', 'patch', 'data'
     ]);
     return Object.keys(parsed).some(key => !metaKeys.has(key));
+}
+
+function extractPanelPatch(parsed) {
+    if (!isPlainObject(parsed)) return null;
+    const containers = [
+        parsed.panels,
+        parsed.panel_updates,
+        parsed.panelUpdates,
+        parsed.panel_patch,
+        parsed.panelPatch,
+        parsed.updates?.panels,
+        parsed.updates?.panel_updates,
+        parsed.changes?.panels,
+        parsed.changes?.panel_updates,
+        parsed.patch?.panels,
+        parsed.patch?.panel_updates,
+        parsed.data?.panels,
+        parsed.data?.panel_updates,
+        parsed.data?.panelUpdates,
+        parsed.data?.updates?.panels,
+        parsed.data?.changes?.panels,
+        parsed['面板'],
+        parsed['面板更新'],
+        parsed['面板增量'],
+        parsed['新增面板'],
+        parsed['新增内容'],
+        parsed['更新']?.panels,
+        parsed['更新']?.['面板'],
+        parsed['变更']?.panels,
+        parsed['变更']?.['面板'],
+        parsed['面板'],
+        parsed['面板更新'],
+        parsed['面板增量']
+    ];
+    for (const candidate of containers) {
+        if (isPlainObject(candidate)) return candidate;
+    }
+    for (const wrapper of [parsed.updates, parsed.changes, parsed.patch, parsed.data]) {
+        if (isPlainObject(wrapper) && looksLikePanelPatch(wrapper)) return wrapper;
+    }
+    return looksLikePanelPatch(parsed) ? parsed : null;
 }
 
 function mergePanelUpdates(panelPatch, options = {}) {
@@ -154,7 +196,8 @@ function mergePanelUpdates(panelPatch, options = {}) {
         'memory_db', 'memoryDb', 'backgroundMemory', 'ambient', 'actions',
         'new_mails', 'new_mails_count', 'new_gallery', 'cg_cutin', 'director_card',
         'active_characters', 'nearby_characters', 'activeCharacters', 'nearbyCharacters',
-        'panel_order', 'panelOrder', 'relation_web', 'map_data', 'mapData'
+        'panel_order', 'panelOrder', 'relation_web', 'map_data', 'mapData',
+        'updates', 'changes', 'patch', 'data'
     ]);
     for (const [panelName, patch] of Object.entries(panelPatch)) {
         if (metaKeys.has(panelName)) continue;
@@ -380,7 +423,7 @@ export async function sendToAI(mailData = null) {
 
         // 解析 JSON 数据
         if (parsed) {
-            const newP = parsed.panels || (looksLikePanelPatch(parsed) ? parsed : null);
+            const newP = extractPanelPatch(parsed);
             mergePanelUpdates(newP);
 
             // 背景记忆
@@ -579,8 +622,8 @@ ${transcript}
         const parsed = safeParseJSON(answer);
         if (parsed) {
             pushUndoSnapshot('force-sync');
-            const newPanels = parsed.panels || (looksLikePanelPatch(parsed) ? parsed : null);
-            mergePanelUpdates(newPanels);
+            const newPanels = extractPanelPatch(parsed);
+            const panelChanged = mergePanelUpdates(newPanels);
             if (parsed.backgroundMemory !== undefined) gameConfig.backgroundMemory = parsed.backgroundMemory;
             updateMemoryFromAIResponse(parsed);
             if (parsed.ambient) {
@@ -590,7 +633,7 @@ ${transcript}
             renderGamePanelsUI();
             gameConfig.lastUpdated = Date.now();
             await saveLocalData();
-            showToast("强制洞察完成", "success");
+            showToast(panelChanged ? "强制洞察完成，已合并面板更新" : "强制洞察完成，未检测到新面板", "success");
         } else {
             showToast("面板重构响应格式异常", "error");
         }
