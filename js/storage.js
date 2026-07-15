@@ -175,8 +175,7 @@ export async function loadLocalData() {
             }
         } catch (e) {
             console.error('Cloud load failed:', e);
-            setCloudAvailable(false);
-            showToast('Cloud sync failed; switched to local storage.', 'error');
+            showToast('云端读取失败，将继续保留重试能力：' + (e.message || String(e)), 'warning', 6000);
         }
     }
     if (!loadedFromCloud) {
@@ -230,7 +229,6 @@ export async function saveLocalData() {
         } catch (e) {
             console.error('Cloud save failed:', e);
             showToast('云端保存失败，已只保存在本地：' + (e.message || String(e)), 'warning', 6000);
-            setCloudAvailable(false);
         }
     });
     return cloudSaveChain;
