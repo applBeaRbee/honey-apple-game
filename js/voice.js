@@ -34,6 +34,18 @@ function finishRecognition() {
     updateVoiceButton(false);
 }
 
+async function requestMicPermission() {
+    if (!navigator.mediaDevices?.getUserMedia) return true;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        return true;
+    } catch (error) {
+        showToast('麦克风权限未开启，请在浏览器地址栏旁允许访问麦克风', 'warning', 5000);
+        return false;
+    }
+}
+
 export function setupVoiceEvents() {
     const btn = document.getElementById('btnVoice');
     if (!btn || btn.dataset.voiceBound === 'true') return;
@@ -89,13 +101,16 @@ export function startRecording() {
     if (!isSupported || !recognition || isRecording) return;
     finalTranscript = '';
     interimTranscript = '';
-    try {
-        recognition.start();
-        isRecording = true;
-        updateVoiceButton(true);
-    } catch (e) {
-        if (e.name !== 'InvalidStateError') showToast('无法启动语音识别，请检查麦克风权限', 'warning');
-    }
+    requestMicPermission().then(ok => {
+        if (!ok || isRecording) return;
+        try {
+            recognition.start();
+            isRecording = true;
+            updateVoiceButton(true);
+        } catch (e) {
+            if (e.name !== 'InvalidStateError') showToast('无法启动语音识别，请检查麦克风权限', 'warning');
+        }
+    });
 }
 
 export function stopRecording() {

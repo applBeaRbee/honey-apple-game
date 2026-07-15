@@ -1,5 +1,5 @@
 // ================= Data persistence =================
-import { appState, isLocalFile, isCloudAvailable, tcbApp, tcbAuth, tcbDb, getStorageKey, getCloudKey, setCloudAvailable, setTcbApp, setTcbAuth, setTcbDb, setAppState } from './state.js';
+import { appState, currentSessionId, gameConfig, isLocalFile, isCloudAvailable, tcbApp, tcbAuth, tcbDb, getStorageKey, getCloudKey, setCloudAvailable, setTcbApp, setTcbAuth, setTcbDb, setAppState } from './state.js';
 import { DEFAULT_SETTINGS } from './constants.js';
 import { showToast } from './ui.js';
 
@@ -80,6 +80,60 @@ function saveSessionBackups(sessions = []) {
     });
 }
 
+function liveSessionKey(sessionId) {
+    return `hat_live_session_${getStorageKey()}_${sessionId}`;
+}
+
+function buildLiveSessionSnapshot(session) {
+    if (!session?.id) return null;
+    const fields = [
+        'id', 'cardId', 'name', 'avatar', 'avatarDataUrl', 'lastUpdated',
+        'history', 'panels', 'originalPanels', 'customPanels', 'backgroundMemory',
+        'memoryDb', 'memoryTiers', 'worldTime', 'ambient', 'mailbox', 'gallery',
+        'worldState', 'worldline', 'undoStack', 'lorebook', 'difyConversationId',
+        'authorsNote', 'charName', 'charInfo', 'worldSetting', 'storyBackground', 'systemPromptText'
+    ];
+    const recovery = {};
+    fields.forEach(field => {
+        if (session[field] !== undefined) recovery[field] = session[field];
+    });
+    return recovery;
+}
+
+function saveLiveSessionSnapshot(session) {
+    const recovery = buildLiveSessionSnapshot(session);
+    if (!recovery) return;
+    try {
+        localStorage.setItem(liveSessionKey(session.id), JSON.stringify({
+            session: recovery,
+            updatedAt: Number(session.lastUpdated || Date.now())
+        }));
+    } catch (error) {
+        console.warn('Live session snapshot failed:', error);
+    }
+}
+
+function mergeLiveSessionSnapshots(sessions = []) {
+    const byId = new Map(sessions.filter(Boolean).map(session => [session.id, session]));
+    const prefix = `hat_live_session_${getStorageKey()}_`;
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (!key?.startsWith(prefix)) continue;
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) continue;
+            const backup = JSON.parse(raw);
+            const session = backup?.session;
+            if (!session?.id) continue;
+            const existing = byId.get(session.id);
+            if (!existing || Number(backup.updatedAt || session.lastUpdated || 0) >= Number(existing.lastUpdated || 0)) {
+                byId.set(session.id, session);
+            }
+        } catch (_) {}
+    }
+    return [...byId.values()];
+}
+
 function restoreSessionBackups(sessions = []) {
     const byId = new Map(sessions.filter(Boolean).map(session => [session.id, session]));
     const prefix = `hat_session_backup_${getStorageKey()}_`;
@@ -127,14 +181,14 @@ export async function loadLocalData() {
     }
     if (!loadedFromCloud) {
         if (localParsed) {
-            localParsed.sessions = restoreSessionBackups(localParsed.sessions || []);
+            localParsed.sessions = mergeLiveSessionSnapshots(restoreSessionBackups(localParsed.sessions || []));
             applyStoredData(localParsed);
         } else {
             setAppState({ cards: [], sessions: [], settings: { ...DEFAULT_SETTINGS } });
         }
     }
     if (loadedFromCloud) {
-        const recoveredSessions = restoreSessionBackups(appState.sessions || []);
+        const recoveredSessions = mergeLiveSessionSnapshots(restoreSessionBackups(appState.sessions || []));
         if (recoveredSessions.some((session, index) => session !== appState.sessions[index]) || recoveredSessions.length !== appState.sessions.length) {
             appState.sessions = recoveredSessions;
         }
@@ -156,6 +210,8 @@ export async function saveLocalData() {
     const snapshot = snapshotAppState();
     if (!snapshot) return;
     saveSessionBackups(snapshot.sessions || []);
+    const activeSession = snapshot.sessions?.find(session => session.id === currentSessionId) || gameConfig;
+    if (activeSession) saveLiveSessionSnapshot(activeSession);
 
     try {
         localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
@@ -186,6 +242,8 @@ export function flushLocalData() {
     const snapshot = snapshotAppState();
     if (!snapshot) return;
     saveSessionBackups(snapshot.sessions || []);
+    const activeSession = snapshot.sessions?.find(session => session.id === currentSessionId) || gameConfig;
+    if (activeSession) saveLiveSessionSnapshot(activeSession);
     try {
         localStorage.setItem('hat_data_' + key, JSON.stringify(snapshot));
         localStorage.setItem('hat_data_meta_' + key, String(Date.now()));
