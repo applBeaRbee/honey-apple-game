@@ -2,7 +2,7 @@
 import { appState, currentSessionId, gameConfig, currentUser, isLocalFile, isCloudAvailable, setCurrentSessionId, setGameConfig } from './state.js';
 import { escapeHtml } from './constants.js';
 import { showToast, showConfirm } from './ui.js';
-import { saveLocalData, getLastCloudSaveTime } from './storage.js';
+import { saveLocalData, getLastCloudSaveTime, deleteSessionEverywhere } from './storage.js';
 import { renderLibrary, renderAvatarHtml } from './cards.js';
 import { updateWorldTimeUI, formatTimeShort } from './time.js';
 import { updateAmbientEnvironment } from './ambient.js';
@@ -236,8 +236,10 @@ export function resumeSession(sessionId) {
 
 export async function deleteSession(id) {
     if (await showConfirm("确定删除此存档？")) {
+        const deletedSession = appState.sessions.find(s => s.id === id) || (gameConfig?.id === id ? gameConfig : null);
         appState.sessions = appState.sessions.filter(s => s.id !== id);
-        saveLocalData();
+        await deleteSessionEverywhere(deletedSession || id);
+        await saveLocalData();
         renderSidebarSessions();
         if (currentSessionId === id) {
             setCurrentSessionId(null);

@@ -66,6 +66,48 @@ function pruneUserBackups() {
     pruneStorageKeys(`hat_session_backup_${getStorageKey()}_`, 6);
 }
 
+function deletedSessionsKey() {
+    return `hat_deleted_sessions_${getStorageKey()}`;
+}
+
+function getDeletedSessionIds() {
+    try {
+        const ids = JSON.parse(localStorage.getItem(deletedSessionsKey()) || '[]');
+        return new Set(Array.isArray(ids) ? ids : []);
+    } catch (_) {
+        return new Set();
+    }
+}
+
+function rememberDeletedSession(sessionId) {
+    if (!sessionId) return;
+    const ids = getDeletedSessionIds();
+    ids.add(sessionId);
+    localStorage.setItem(deletedSessionsKey(), JSON.stringify([...ids].slice(-300)));
+}
+
+function mergeDeletedSessionIds(sessionIds = []) {
+    if (!Array.isArray(sessionIds) || !sessionIds.length) return;
+    const ids = getDeletedSessionIds();
+    sessionIds.filter(Boolean).forEach(id => ids.add(id));
+    localStorage.setItem(deletedSessionsKey(), JSON.stringify([...ids].slice(-300)));
+}
+
+function isSessionDeleted(sessionId) {
+    return getDeletedSessionIds().has(sessionId);
+}
+
+function filterDeletedSessions(sessions = []) {
+    const deleted = getDeletedSessionIds();
+    return (sessions || []).filter(session => session?.id && !deleted.has(session.id));
+}
+
+function clearLocalSessionBackups(sessionId) {
+    if (!sessionId) return;
+    localStorage.removeItem(sessionBackupKey(sessionId));
+    localStorage.removeItem(liveSessionKey(sessionId));
+}
+
 function openSaveDb() {
     return new Promise((resolve, reject) => {
         if (!window.indexedDB) {
@@ -216,6 +258,35 @@ export async function waitForCloudSave() {
     return !pendingCloudPayload && getLastCloudSaveTime() > 0;
 }
 
+async function removeCloudDoc(key) {
+    if (!key || !(isCloudAvailable && tcbAuth && tcbDb)) return;
+    try {
+        await ensureCloudLogin();
+        const ref = tcbDb.collection('hat_saves').doc(key);
+        if (typeof ref.remove === 'function') await ref.remove();
+        else await ref.set({ deleted: true, updateTime: Date.now(), storageMode: CLOUD_SPLIT_MODE });
+    } catch (error) {
+        console.warn('Cloud session cleanup failed:', key, error);
+    }
+}
+
+export async function deleteSessionEverywhere(session) {
+    const sessionId = typeof session === 'string' ? session : session?.id;
+    if (!sessionId) return;
+    rememberDeletedSession(sessionId);
+    clearLocalSessionBackups(sessionId);
+
+    const cloudKey = getCloudKey();
+    const keys = new Set();
+    keys.add(cloudDocKey(cloudKey, 'session', sessionId));
+    const explicitHistoryKeys = Array.isArray(session?.historyChunkKeys) ? session.historyChunkKeys : [];
+    explicitHistoryKeys.forEach(key => keys.add(key));
+    const historyCount = Array.isArray(session?.history) ? session.history.length : Number(session?.historyCount || 0);
+    const chunkCount = Math.ceil(historyCount / CLOUD_HISTORY_CHUNK_SIZE);
+    for (let index = 0; index < chunkCount; index++) keys.add(cloudDocKey(cloudKey, 'history', sessionId, `__${index}`));
+    await Promise.all([...keys].map(removeCloudDoc));
+}
+
 export async function initCloudBase() {
     if (isLocalFile) {
         console.warn('file:// mode: cloud storage is disabled.');
@@ -246,9 +317,10 @@ export function normalizeCloudDocData(res) {
 }
 
 function applyStoredData(parsed) {
+    mergeDeletedSessionIds(parsed.deletedSessionIds || []);
     setAppState({
         cards: parsed.cards || [],
-        sessions: parsed.sessions || [],
+        sessions: filterDeletedSessions(parsed.sessions || []),
         settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) }
     });
 }
@@ -337,7 +409,7 @@ function saveLiveSessionSnapshot(session) {
 }
 
 function mergeLiveSessionSnapshots(sessions = []) {
-    const byId = new Map(sessions.filter(Boolean).map(session => [session.id, session]));
+    const byId = new Map(filterDeletedSessions(sessions).filter(Boolean).map(session => [session.id, session]));
     const prefix = `hat_live_session_${getStorageKey()}_`;
     for (let index = 0; index < localStorage.length; index++) {
         const key = localStorage.key(index);
@@ -348,6 +420,7 @@ function mergeLiveSessionSnapshots(sessions = []) {
             const backup = JSON.parse(raw);
             const session = backup?.session;
             if (!session?.id) continue;
+            if (isSessionDeleted(session.id)) continue;
             const existing = byId.get(session.id);
             if (!existing || Number(backup.updatedAt || session.lastUpdated || 0) >= Number(existing.lastUpdated || 0)) {
                 byId.set(session.id, session);
@@ -358,7 +431,7 @@ function mergeLiveSessionSnapshots(sessions = []) {
 }
 
 function restoreSessionBackups(sessions = []) {
-    const byId = new Map(sessions.filter(Boolean).map(session => [session.id, session]));
+    const byId = new Map(filterDeletedSessions(sessions).filter(Boolean).map(session => [session.id, session]));
     const prefix = `hat_session_backup_${getStorageKey()}_`;
     for (let index = 0; index < localStorage.length; index++) {
         const key = localStorage.key(index);
@@ -367,6 +440,7 @@ function restoreSessionBackups(sessions = []) {
             const backup = JSON.parse(localStorage.getItem(key) || '');
             const session = backup?.session;
             if (!session?.id) continue;
+            if (isSessionDeleted(session.id)) continue;
             const existing = byId.get(session.id);
             if (!existing || Number(backup.updatedAt || session.lastUpdated || 0) > Number(existing.lastUpdated || 0)) {
                 byId.set(session.id, session);
@@ -541,6 +615,7 @@ function buildSessionCloudDocs(session, cloudKey, updateTime) {
 
 function buildSplitCloudPayload(snapshot, cloudKey, updateTime) {
     const stored = JSON.parse(JSON.stringify(snapshot));
+    stored.deletedSessionIds = [...getDeletedSessionIds()];
     const cardDocs = [];
     const sessionDocs = [];
     const historyDocs = [];
@@ -614,6 +689,7 @@ async function hydrateSplitCloudData(indexData = {}) {
 
 function buildStorageSnapshot(snapshot) {
     const stored = JSON.parse(JSON.stringify(snapshot));
+    stored.deletedSessionIds = [...getDeletedSessionIds()];
     stored.cards = Array.isArray(stored.cards) ? stored.cards.map(stripDisposableCardData) : [];
     stored.sessions = Array.isArray(stored.sessions) ? stored.sessions.map(stripDisposableSessionData) : [];
     return stored;
