@@ -19,6 +19,8 @@ const CLOUD_SAVE_BACKGROUND_RETRY_MS = 15000;
 const IDB_NAME = 'honey_apple_storage';
 const IDB_STORE = 'saves';
 const IDB_VERSION = 1;
+const CLOUD_SPLIT_MODE = 'split-docs-v2';
+const CLOUD_HISTORY_CHUNK_SIZE = 80;
 
 export function getLastCloudSaveTime() {
     const key = getStorageKey();
@@ -123,7 +125,24 @@ async function writeCloudPayload(payload, cloudKey) {
     for (let attempt = 0; attempt <= CLOUD_SAVE_RETRY_DELAYS.length; attempt++) {
         try {
             await ensureCloudLogin();
-            await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
+            if (payload?.storageMode === CLOUD_SPLIT_MODE) {
+                for (const item of payload.cardDocs || []) {
+                    await tcbDb.collection('hat_saves').doc(item.key).set(item.payload);
+                }
+                for (const item of payload.historyDocs || []) {
+                    await tcbDb.collection('hat_saves').doc(item.key).set(item.payload);
+                }
+                for (const item of payload.sessionDocs || []) {
+                    await tcbDb.collection('hat_saves').doc(item.key).set(item.payload);
+                }
+                await tcbDb.collection('hat_saves').doc(cloudKey).set({
+                    gameData: payload.gameData,
+                    updateTime: payload.updateTime,
+                    storageMode: CLOUD_SPLIT_MODE
+                });
+            } else {
+                await tcbDb.collection('hat_saves').doc(cloudKey).set(payload);
+            }
             return;
         } catch (error) {
             lastError = error;
@@ -378,7 +397,10 @@ export async function loadLocalData() {
             const res = await tcbDb.collection('hat_saves').doc(getCloudKey()).get();
             const doc = normalizeCloudDocData(res);
             if (doc?.gameData && Number(doc.updateTime || 0) >= localUpdatedAt) {
-                applyStoredData(doc.gameData);
+                const cloudData = doc.storageMode === CLOUD_SPLIT_MODE
+                    ? await hydrateSplitCloudData(doc.gameData)
+                    : doc.gameData;
+                applyStoredData(cloudData);
                 loadedFromCloud = true;
             }
         } catch (e) {
@@ -462,6 +484,134 @@ function stripDisposableSessionData(session) {
     return slim;
 }
 
+function buildCardSummary(card) {
+    if (!card || typeof card !== 'object') return card;
+    return stripDisposableCardData({
+        id: card.id,
+        name: card.name,
+        description: stripHugeText(card.description || '', 500),
+        avatar: typeof card.avatar === 'string' && card.avatar.startsWith('data:') ? '馃摐' : card.avatar,
+        tags: card.tags,
+        updatedAt: card.updatedAt,
+        lastUpdated: card.lastUpdated
+    });
+}
+
+function buildSessionSummary(session) {
+    if (!session || typeof session !== 'object') return session;
+    return stripDisposableSessionData({
+        id: session.id,
+        cardId: session.cardId,
+        name: session.name,
+        avatar: typeof session.avatar === 'string' && session.avatar.startsWith('data:') ? '馃摐' : session.avatar,
+        lastUpdated: session.lastUpdated,
+        worldTime: session.worldTime,
+        historyCount: Array.isArray(session.history) ? session.history.length : 0
+    });
+}
+
+function chunkArray(items = [], size = CLOUD_HISTORY_CHUNK_SIZE) {
+    const chunks = [];
+    for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+    return chunks;
+}
+
+function cloudDocKey(cloudKey, type, id, suffix = '') {
+    const safeId = encodeURIComponent(String(id || 'unknown')).replace(/%/g, '_');
+    return `${cloudKey}__${type}__${safeId}${suffix}`;
+}
+
+function buildSessionCloudDocs(session, cloudKey, updateTime) {
+    const clean = stripDisposableSessionData(session);
+    const history = Array.isArray(clean.history) ? clean.history : [];
+    const chunks = chunkArray(history);
+    const historyKeys = chunks.map((_, index) => cloudDocKey(cloudKey, 'history', session.id, `__${index}`));
+    const sessionBody = { ...clean, history: undefined, historyChunkKeys: historyKeys };
+    return {
+        sessionDoc: {
+            key: cloudDocKey(cloudKey, 'session', session.id),
+            payload: { session: sessionBody, updateTime, storageMode: CLOUD_SPLIT_MODE }
+        },
+        historyDocs: chunks.map((chunk, index) => ({
+            key: historyKeys[index],
+            payload: { sessionId: session.id, index, history: chunk, updateTime, storageMode: CLOUD_SPLIT_MODE }
+        }))
+    };
+}
+
+function buildSplitCloudPayload(snapshot, cloudKey, updateTime) {
+    const stored = JSON.parse(JSON.stringify(snapshot));
+    const cardDocs = [];
+    const sessionDocs = [];
+    const historyDocs = [];
+
+    stored.cards = Array.isArray(stored.cards) ? stored.cards.map(card => {
+        const summary = buildCardSummary(card);
+        const key = cloudDocKey(cloudKey, 'card', card.id || card.name);
+        cardDocs.push({ key, payload: { card: stripDisposableCardData(card), updateTime, storageMode: CLOUD_SPLIT_MODE } });
+        return { ...summary, cloudDocKey: key };
+    }) : [];
+
+    stored.sessions = Array.isArray(stored.sessions) ? stored.sessions.map(session => {
+        const summary = buildSessionSummary(session);
+        const docs = buildSessionCloudDocs(session, cloudKey, updateTime);
+        sessionDocs.push(docs.sessionDoc);
+        historyDocs.push(...docs.historyDocs);
+        return { ...summary, cloudDocKey: docs.sessionDoc.key, historyChunkKeys: docs.sessionDoc.payload.session.historyChunkKeys };
+    }) : [];
+
+    return {
+        storageMode: CLOUD_SPLIT_MODE,
+        updateTime,
+        gameData: stored,
+        cardDocs,
+        sessionDocs,
+        historyDocs
+    };
+}
+
+async function readCloudDoc(key) {
+    if (!key) return null;
+    const doc = normalizeCloudDocData(await tcbDb.collection('hat_saves').doc(key).get());
+    return doc || null;
+}
+
+async function hydrateSplitCloudData(indexData = {}) {
+    const hydrated = JSON.parse(JSON.stringify(indexData));
+    hydrated.cards = await Promise.all((hydrated.cards || []).map(async card => {
+        try {
+            const doc = await readCloudDoc(card.cloudDocKey);
+            return doc?.card ? { ...doc.card, cloudDocKey: card.cloudDocKey } : card;
+        } catch (error) {
+            console.warn('Cloud card hydrate failed:', card.cloudDocKey, error);
+            return card;
+        }
+    }));
+
+    hydrated.sessions = await Promise.all((hydrated.sessions || []).map(async session => {
+        try {
+            const doc = await readCloudDoc(session.cloudDocKey);
+            const full = doc?.session ? { ...session, ...doc.session } : session;
+            const historyKeys = full.historyChunkKeys || session.historyChunkKeys || [];
+            const chunks = await Promise.all(historyKeys.map(async key => {
+                try {
+                    const chunkDoc = await readCloudDoc(key);
+                    return Array.isArray(chunkDoc?.history) ? chunkDoc.history : [];
+                } catch (error) {
+                    console.warn('Cloud history hydrate failed:', key, error);
+                    return [];
+                }
+            }));
+            full.history = chunks.flat();
+            return full;
+        } catch (error) {
+            console.warn('Cloud session hydrate failed:', session.cloudDocKey, error);
+            return session;
+        }
+    }));
+    return hydrated;
+}
+
 function buildStorageSnapshot(snapshot) {
     const stored = JSON.parse(JSON.stringify(snapshot));
     stored.cards = Array.isArray(stored.cards) ? stored.cards.map(stripDisposableCardData) : [];
@@ -469,8 +619,8 @@ function buildStorageSnapshot(snapshot) {
     return stored;
 }
 
-function buildCloudSnapshot(snapshot) {
-    return buildStorageSnapshot(snapshot);
+function buildCloudSnapshot(snapshot, cloudKey, updateTime) {
+    return buildSplitCloudPayload(snapshot, cloudKey, updateTime);
 }
 
 async function saveSnapshotToLocal(key, snapshot) {
@@ -509,9 +659,9 @@ export async function saveLocalData() {
         publishCloudSaveStatus('local');
         return;
     }
-    const cloudSnapshot = buildCloudSnapshot(snapshot);
-    const payload = { gameData: cloudSnapshot, updateTime: Date.now() };
     const cloudKey = getCloudKey();
+    const updateTime = Date.now();
+    const payload = buildCloudSnapshot(snapshot, cloudKey, updateTime);
     return queueCloudSave(payload, cloudKey, key);
 }
 
