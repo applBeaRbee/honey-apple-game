@@ -228,7 +228,7 @@ function parseAbsoluteFromText(text, options = {}) {
     const source = String(text);
     const sourceType = options.source || 'narrative';
     const allowLoose = sourceType === 'json' || sourceType === 'manual';
-    const labelPattern = '(?:\u5f53\u524d\u65f6\u95f4|\u4e16\u754c\u65f6\u95f4|\u73b0\u5728\u65f6\u95f4|\u76ee\u524d\u65f6\u95f4|\u65f6\u95f4\u72b6\u6001)';
+    const labelPattern = '(?:\u5f53\u524d\u65f6\u95f4|\u4e16\u754c\u65f6\u95f4|\u73b0\u5728\u65f6\u95f4|\u76ee\u524d\u65f6\u95f4|\u65f6\u95f4\u72b6\u6001|\u65f6\u95f4)';
     const hasTimeLabel = new RegExp(labelPattern).test(source);
 
     if (sourceType === 'narrative' && !hasTimeLabel) return null;
@@ -301,7 +301,7 @@ function parseElapsedMinutes(text, options = {}) {
     const source = String(text);
     const requireTrigger = options.requireTrigger !== false;
     const maxMinutes = options.maxMinutes || MAX_NARRATIVE_ELAPSED_MINUTES;
-    const trigger = '(?:\\u7ecf\\u8fc7|\\u8fc7\\u53bb|\\u8fc7\\u4e86|\\u53c8\\u8fc7|\\u6301\\u7eed|\\u82b1\\u4e86|\\u8017\\u65f6|\\u7b49\\u4e86|\\u804a\\u4e86|\\u7761\\u4e86|\\u4f11\\u606f\\u4e86)';
+    const trigger = '(?:\\u65f6\\u95f4\\u63a8\\u8fdb|\\u7ecf\\u8fc7|\\u8fc7\\u53bb|\\u8fc7\\u4e86|\\u53c8\\u8fc7|\\u6301\\u7eed|\\u82b1\\u4e86|\\u8017\\u65f6|\\u7b49\\u4e86|\\u804a\\u4e86|\\u7761\\u4e86|\\u4f11\\u606f\\u4e86)';
     const prefix = requireTrigger ? trigger + '[\\s\\S]{0,8}?' : '[\\s\\S]{0,8}?';
     const units = [
         { pattern: '(?:\\u5929|\\u65e5|day|days|d)', scale: MINUTES_PER_DAY },
