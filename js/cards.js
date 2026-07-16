@@ -1,9 +1,9 @@
 // ================= 剧情卡系统 (CRUD + 导入) =================
-import { appState } from './state.js';
+import { appState, gameConfig } from './state.js';
 import { escapeHtml, generateId } from './constants.js';
 import { showToast, showConfirm, closeModal } from './ui.js';
 import { saveLocalData } from './storage.js';
-import { renderPanelPreviewHtml } from './panels.js';
+import { renderGamePanelsUI, renderPanelPreviewHtml } from './panels.js';
 import { renderStructuredText, renderInfoCard } from './structured-renderer.js';
 import { renderSidebarSessions } from './sessions.js';
 import { buildLorebookFromCharacterBook, buildGameplayPanelsFromCharacterBook as buildImportedPanelsFromCharacterBook, parseSillyTavernCharacterCard } from './card-importer.js';
@@ -211,6 +211,7 @@ export function duplicateCard(id) {
 export function openCardEditor(cardId = null) {
     const modal = document.getElementById('cardEditorModal');
     if (!modal) return;
+    document.getElementById('editCardMode').value = 'card';
     if (cardId) {
         const card = appState.cards.find(c => c.id === cardId);
         if (!card) return;
@@ -239,8 +240,28 @@ export function openCardEditor(cardId = null) {
     modal.style.display = 'flex';
 }
 
+export function openSessionCardEditor() {
+    if (!gameConfig) return showToast('当前没有可编辑的存档', 'warning');
+    const modal = document.getElementById('cardEditorModal');
+    if (!modal) return;
+    document.getElementById('editCardMode').value = 'session';
+    document.getElementById('cardEditorTitle').innerText = '📝 编辑当前存档角色卡';
+    document.getElementById('editCardId').value = gameConfig.id || '';
+    document.getElementById('editCardAvatar').value = gameConfig.avatar || '📜';
+    document.getElementById('editCardName').value = gameConfig.name || gameConfig.charName || '';
+    document.getElementById('editCardWorld').value = gameConfig.worldSetting || '';
+    document.getElementById('editCardStory').value = gameConfig.storyBackground || '';
+    document.getElementById('editCardCharName').value = gameConfig.charName || '';
+    document.getElementById('editCardCharInfo').value = gameConfig.charInfo || '';
+    document.getElementById('editCardPrompt').value = gameConfig.systemPromptText || '';
+    document.getElementById('editCardOpening').value = gameConfig.openingText || '';
+    document.getElementById('editCardPanelJSON').value = JSON.stringify(gameConfig.panels || {}, null, 2);
+    modal.style.display = 'flex';
+}
+
 export function saveCardEditor() {
     const id = document.getElementById('editCardId').value;
+    const mode = document.getElementById('editCardMode')?.value || 'card';
     const name = document.getElementById('editCardName').value.trim();
     const panelJson = document.getElementById('editCardPanelJSON').value.trim();
     if (!name) return showToast('名称不能为空', 'error');
@@ -258,6 +279,29 @@ export function saveCardEditor() {
         openingText: document.getElementById('editCardOpening').value.trim(),
         lorebook: id ? (appState.cards.find(c => c.id === id)?.lorebook || {}) : {}
     };
+    if (mode === 'session') {
+        if (!gameConfig) return showToast('当前没有可保存的存档', 'error');
+        let panels = {};
+        try { panels = panelJson ? JSON.parse(panelJson) : {}; } catch (e) { return showToast('JSON格式错误', 'error'); }
+        gameConfig.avatar = data.avatar || gameConfig.avatar;
+        gameConfig.name = data.name || gameConfig.name;
+        gameConfig.worldSetting = data.worldSetting;
+        gameConfig.storyBackground = data.storyBackground;
+        gameConfig.charName = data.defaultCharName;
+        gameConfig.charInfo = data.defaultCharInfo;
+        gameConfig.systemPromptText = data.systemPrompt;
+        gameConfig.openingText = data.openingText;
+        gameConfig.panels = panels;
+        gameConfig.originalPanels = gameConfig.originalPanels || JSON.parse(JSON.stringify(panels));
+        gameConfig.lastUpdated = Date.now();
+        document.getElementById('gameTitle').innerText = gameConfig.name || gameConfig.charName || '冒险';
+        saveLocalData();
+        renderSidebarSessions();
+        renderGamePanelsUI();
+        closeModal('cardEditorModal');
+        showToast('当前存档角色卡已更新', 'success');
+        return;
+    }
     if (id) {
         const idx = appState.cards.findIndex(c => c.id === id);
         if (idx !== -1) appState.cards[idx] = { ...appState.cards[idx], ...data };
@@ -1001,6 +1045,7 @@ export function parseSillyTavernCard(htmlContent) {
 
 // ===== 导出到 window =====
 window.openCardEditor = openCardEditor;
+window.openSessionCardEditor = openSessionCardEditor;
 window.saveCardEditor = saveCardEditor;
 window.deleteCard = deleteCard;
 window.duplicateCard = duplicateCard;

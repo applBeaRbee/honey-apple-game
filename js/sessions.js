@@ -269,6 +269,10 @@ export function switchMobileGameTab(tab) {
 }
 
 export function openSessionEditModal() {
+    if (typeof window.openSessionCardEditor === 'function') {
+        window.openSessionCardEditor();
+        return;
+    }
     // Placeholder for session editing if needed
     showToast("会话编辑功能开发中", "info");
 }
