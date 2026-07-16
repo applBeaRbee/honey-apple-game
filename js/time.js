@@ -223,6 +223,11 @@ function hasCurrentTimeIntent(text) {
     return /\u73b0\u5728|\u6b64\u523b|\u5f53\u524d|\u8fd9\u65f6|\u6b64\u65f6|\u65f6\u95f4|\u65f6\u949f|\u949f\u8868|\u5929\u8272|\u5df2\u662f|\u6765\u5230|\u5230\u4e86/.test(text);
 }
 
+function hasExplicitClockContext(text) {
+    return /\u624b\u673a|\u95f9\u949f|\u949f\u8868|\u65f6\u949f|\u5c4f\u5e55|\u8868\u76d8|\u770b\u4e86\u4e00\u773c|\u65f6\u95f4/.test(text)
+        || /\*\*\s*\d{1,2}[:\uff1a]\d{1,2}\s*\*\*/.test(text);
+}
+
 function parseAbsoluteFromText(text, options = {}) {
     if (!text) return null;
     const source = String(text);
@@ -231,7 +236,7 @@ function parseAbsoluteFromText(text, options = {}) {
     const labelPattern = '(?:\u5f53\u524d\u65f6\u95f4|\u4e16\u754c\u65f6\u95f4|\u73b0\u5728\u65f6\u95f4|\u76ee\u524d\u65f6\u95f4|\u65f6\u95f4\u72b6\u6001|\u65f6\u95f4)';
     const hasTimeLabel = new RegExp(labelPattern).test(source);
 
-    if (sourceType === 'narrative' && !hasTimeLabel) return null;
+    if (sourceType === 'narrative' && !hasTimeLabel && !hasExplicitClockContext(source)) return null;
 
     const timePrefix = hasTimeLabel ? labelPattern + '\\s*[:：]?\\s*' : '';
     const dayPattern = new RegExp(timePrefix + '(?:\\u7b2c\\s*)?(' + CN_DIGITS + ')\\s*(?:\\u5929|\\u65e5)[\\s\\S]{0,24}?' + PERIOD_PATTERN + '\\s*(' + CN_DIGITS + ')' + CLOCK_MARK_PATTERN + '\\s*(' + CN_DIGITS + '|\\u534a)?');
@@ -242,14 +247,14 @@ function parseAbsoluteFromText(text, options = {}) {
 
     const digitalPattern = new RegExp(timePrefix + PERIOD_PATTERN + '\\s*(\\d{1,2})\\s*[:\\uff1a]\\s*(\\d{1,2})');
     match = source.match(digitalPattern);
-    if (match && (allowLoose || hasCurrentTimeIntent(source) || match[1])) {
+    if (match && (allowLoose || hasCurrentTimeIntent(source) || hasExplicitClockContext(source) || match[1])) {
         return buildAbsoluteTime({ period: match[1], hourToken: match[2], minuteToken: match[3], explicitDay: false });
     }
 
     const clockPattern = new RegExp(timePrefix + PERIOD_PATTERN + '\\s*(' + CN_DIGITS + ')' + CLOCK_MARK_PATTERN + '\\s*(' + CN_DIGITS + '|\\u534a)?');
     match = source.match(clockPattern);
     if (!match) return null;
-    if (!allowLoose && !hasCurrentTimeIntent(source) && !match[1]) return null;
+    if (!allowLoose && !hasCurrentTimeIntent(source) && !hasExplicitClockContext(source) && !match[1]) return null;
     return buildAbsoluteTime({ period: match[1], hourToken: match[2], minuteToken: match[3], explicitDay: false });
 }
 
@@ -290,9 +295,9 @@ function validateAbsoluteCandidate(candidate, before, source = 'json') {
 export function extractAbsoluteWorldTime(parsed = null, aiText = '') {
     const before = getWorldTimeSnapshot();
     const jsonTime = validateAbsoluteCandidate(getParsedAbsoluteTime(parsed), before, 'json');
-    if (jsonTime) return jsonTime.time;
-
     const narrativeTime = validateAbsoluteCandidate(parseWorldTime(aiText, { source: 'narrative' }), before, 'narrative');
+    if (narrativeTime && (!jsonTime || narrativeTime.minutes > jsonTime.minutes)) return narrativeTime.time;
+    if (jsonTime) return jsonTime.time;
     return narrativeTime?.time || null;
 }
 
@@ -370,10 +375,14 @@ export function applyTurnTime(userText = '', aiText = '', parsed = null, options
     if (options.advance === false) return { before, after: before, minutes: 0, changed: false, source: 'skipped' };
 
     const jsonAbsolute = validateAbsoluteCandidate(getParsedAbsoluteTime(parsed), before, 'json');
-    if (jsonAbsolute) {
-        gameConfig.worldTime = normalizeWorldTime(jsonAbsolute.time);
+    const narrativeAbsolute = validateAbsoluteCandidate(parseWorldTime(aiText, { source: 'narrative' }), before, 'narrative');
+    const preferredAbsolute = narrativeAbsolute && (!jsonAbsolute || narrativeAbsolute.minutes > jsonAbsolute.minutes)
+        ? { ...narrativeAbsolute, source: 'narrative-absolute' }
+        : (jsonAbsolute ? { ...jsonAbsolute, source: 'json-absolute' } : null);
+    if (preferredAbsolute) {
+        gameConfig.worldTime = normalizeWorldTime(preferredAbsolute.time);
         updateWorldTimeUI();
-        return { before, after: getWorldTimeSnapshot(), minutes: jsonAbsolute.minutes, changed: jsonAbsolute.minutes > 0, source: 'json-absolute' };
+        return { before, after: getWorldTimeSnapshot(), minutes: preferredAbsolute.minutes, changed: preferredAbsolute.minutes > 0, source: preferredAbsolute.source };
     }
 
     const explicit = parsed?.pass_time ?? parsed?.time_passed ?? parsed?.elapsed_minutes ?? parsed?.elapsedMinutes ?? parsed?.passTime;
@@ -381,13 +390,6 @@ export function applyTurnTime(userText = '', aiText = '', parsed = null, options
         const minutes = normalizeMinutes(explicit, 0, MAX_JSON_ELAPSED_MINUTES);
         const change = addWorldTime(minutes);
         return { ...(change || { before, after: before, minutes: 0 }), changed: minutes > 0, source: 'json-elapsed' };
-    }
-
-    const narrativeAbsolute = validateAbsoluteCandidate(parseWorldTime(aiText, { source: 'narrative' }), before, 'narrative');
-    if (narrativeAbsolute) {
-        gameConfig.worldTime = normalizeWorldTime(narrativeAbsolute.time);
-        updateWorldTimeUI();
-        return { before, after: getWorldTimeSnapshot(), minutes: narrativeAbsolute.minutes, changed: narrativeAbsolute.minutes > 0, source: 'narrative-absolute' };
     }
 
     const minutes = inferPassTime(userText, aiText, null);
