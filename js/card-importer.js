@@ -77,6 +77,67 @@ export function buildPanelsFromCharacterBook(charData, card) {
     return panels;
 }
 
+export function buildGameplayPanelsFromCharacterBook(charData, card) {
+    const entries = normalizeCharacterBook(charData.character_book);
+    const characters = extractCharacters(entries);
+    const core = buildCorePanel(charData, card, entries);
+    const current = core['鎵€鍦ㄥ湴'] || core['所在地'] || charData.extensions?.world || '起点';
+    const panels = {
+        '当前状态': {
+            '角色': core['濮撳悕'] || core['姓名'] || card.defaultCharName || card.name || '{charName}',
+            '状态': core['鐘舵€?'] || core['状态'] || '正常',
+            '当前位置': current,
+            '当前目标': '等待玩家行动'
+        },
+        '背包': extractInitialInventory(entries),
+        '任务追踪': []
+    };
+
+    if (characters.length) panels['社交关系'] = buildRelationPanel(card, characters);
+
+    if (hasAbilitySystem(entries)) {
+        panels['能力状态'] = {
+            '已掌握': [],
+            '当前效果': [],
+            '限制': '根据剧情更新'
+        };
+    }
+
+    panels['区域地图'] = buildMapPanel(entries, current);
+    return panels;
+}
+
+function extractInitialInventory(entries) {
+    const items = [];
+    for (const entry of entries) {
+        const sample = `${entry.title}\n${entry.compact}`;
+        if (entry.type !== 'item') continue;
+        if (!/背包|随身|持有|拥有|初始|携带|inventory|bag/i.test(sample)) continue;
+        const fields = parseFields(entry.content);
+        const name = fields['鐗╁搧鍚嶇О'] || fields['物品名称'] || cleanTitle(entry.title);
+        items.push({ name, desc: normalizeOneLine(entry.compact, 120), count: fields['鏁伴噺'] || fields['数量'] || 1 });
+    }
+    return items.slice(0, 12);
+}
+
+function hasAbilitySystem(entries) {
+    return entries.some(entry => /异能|能力|技能|魔法|法术|功法|修为|傀儡|强化|支配|血脉|天赋|ability|skill/i.test(`${entry.title}\n${entry.compact}`));
+}
+
+function buildMapPanel(entries, current) {
+    const locations = entries
+        .filter(entry => entry.type === 'location')
+        .map(entry => {
+            const fields = parseFields(entry.content);
+            const name = fields['鍦扮偣鍚嶇О'] || fields['鍖哄煙鍚嶇О'] || fields['地点名称'] || fields['区域名称'] || cleanTitle(entry.title);
+            return { id: name, name, type: '地点', desc: normalizeOneLine(entry.compact, 120) };
+        })
+        .filter(item => item.name)
+        .slice(0, 24);
+    if (!locations.some(item => item.name === current)) locations.unshift({ id: current, name: current, type: '当前位置' });
+    return { currentPosition: current, area: locations, routes: [] };
+}
+
 export function buildLorebookFromCharacterBook(characterBook, baseLorebook = {}) {
     const lorebook = { ...baseLorebook };
     for (const entry of normalizeCharacterBook(characterBook)) {
@@ -432,7 +493,7 @@ export function parseSillyTavernCharacterCard(input, options = {}) {
     card.lorebook = buildLorebookFromCharacterBook(book, tagLore);
 
     let panels;
-    if (book?.entries?.length) panels = buildPanelsFromCharacterBook({ ...data, character_book: book }, card);
+    if (book?.entries?.length) panels = buildGameplayPanelsFromCharacterBook({ ...data, character_book: book }, card);
     if (!panels) {
         panels = {
             '人物核心': { '姓名': card.name || '{charName}', '状态': '正常' },

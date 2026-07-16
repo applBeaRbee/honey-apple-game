@@ -6,7 +6,7 @@ import { saveLocalData } from './storage.js';
 import { renderPanelPreviewHtml } from './panels.js';
 import { renderStructuredText, renderInfoCard } from './structured-renderer.js';
 import { renderSidebarSessions } from './sessions.js';
-import { buildLorebookFromCharacterBook, buildPanelsFromCharacterBook as buildImportedPanelsFromCharacterBook, parseSillyTavernCharacterCard } from './card-importer.js';
+import { buildLorebookFromCharacterBook, buildGameplayPanelsFromCharacterBook as buildImportedPanelsFromCharacterBook, parseSillyTavernCharacterCard } from './card-importer.js';
 
 // ===== 创建默认卡片 =====
 export function createDefaultCard() {
