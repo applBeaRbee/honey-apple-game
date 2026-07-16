@@ -228,20 +228,25 @@ function parseAbsoluteFromText(text, options = {}) {
     const source = String(text);
     const sourceType = options.source || 'narrative';
     const allowLoose = sourceType === 'json' || sourceType === 'manual';
+    const labelPattern = '(?:\u5f53\u524d\u65f6\u95f4|\u4e16\u754c\u65f6\u95f4|\u73b0\u5728\u65f6\u95f4|\u76ee\u524d\u65f6\u95f4|\u65f6\u95f4\u72b6\u6001)';
+    const hasTimeLabel = new RegExp(labelPattern).test(source);
 
-    const dayPattern = new RegExp('(?:\\u7b2c\\s*)?(' + CN_DIGITS + ')\\s*(?:\\u5929|\\u65e5)[\\s\\S]{0,24}?' + PERIOD_PATTERN + '\\s*(' + CN_DIGITS + ')' + CLOCK_MARK_PATTERN + '\\s*(' + CN_DIGITS + '|\\u534a)?');
+    if (sourceType === 'narrative' && !hasTimeLabel) return null;
+
+    const timePrefix = hasTimeLabel ? labelPattern + '\\s*[:：]?\\s*' : '';
+    const dayPattern = new RegExp(timePrefix + '(?:\\u7b2c\\s*)?(' + CN_DIGITS + ')\\s*(?:\\u5929|\\u65e5)[\\s\\S]{0,24}?' + PERIOD_PATTERN + '\\s*(' + CN_DIGITS + ')' + CLOCK_MARK_PATTERN + '\\s*(' + CN_DIGITS + '|\\u534a)?');
     let match = source.match(dayPattern);
     if (match) {
         return buildAbsoluteTime({ dayToken: match[1], period: match[2], hourToken: match[3], minuteToken: match[4], explicitDay: true });
     }
 
-    const digitalPattern = new RegExp(PERIOD_PATTERN + '\\s*(\\d{1,2})\\s*[:\\uff1a]\\s*(\\d{1,2})');
+    const digitalPattern = new RegExp(timePrefix + PERIOD_PATTERN + '\\s*(\\d{1,2})\\s*[:\\uff1a]\\s*(\\d{1,2})');
     match = source.match(digitalPattern);
     if (match && (allowLoose || hasCurrentTimeIntent(source) || match[1])) {
         return buildAbsoluteTime({ period: match[1], hourToken: match[2], minuteToken: match[3], explicitDay: false });
     }
 
-    const clockPattern = new RegExp(PERIOD_PATTERN + '\\s*(' + CN_DIGITS + ')' + CLOCK_MARK_PATTERN + '\\s*(' + CN_DIGITS + '|\\u534a)?');
+    const clockPattern = new RegExp(timePrefix + PERIOD_PATTERN + '\\s*(' + CN_DIGITS + ')' + CLOCK_MARK_PATTERN + '\\s*(' + CN_DIGITS + '|\\u534a)?');
     match = source.match(clockPattern);
     if (!match) return null;
     if (!allowLoose && !hasCurrentTimeIntent(source) && !match[1]) return null;

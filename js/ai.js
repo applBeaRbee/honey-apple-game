@@ -3,7 +3,7 @@ import { appState, gameConfig, currentUser, isMailSending, setIsMailSending } fr
 import { escapeHtml, safeParseJSON } from './constants.js';
 import { showToast } from './ui.js';
 import { saveLocalData } from './storage.js';
-import { animateTimePass, getWorldTimeSnapshot, applyTurnTime, describeTimePass, formatWorldTime } from './time.js';
+import { animateTimePass, getWorldTimeSnapshot, applyTurnTime, describeTimePass, formatWorldTime, parseWorldTime } from './time.js';
 import { updateAmbientEnvironment } from './ambient.js';
 import { renderGamePanelsUI, preserveSpecialPanels } from './panels.js';
 import { renderActionBar, createStateSnapshot, pushUndoSnapshot, restoreStateSnapshot } from './actions.js';
@@ -11,7 +11,7 @@ import { renderSidebarSessions } from './sessions.js';
 import { formatMsgContent } from './chat.js';
 import { checkMailRedDot } from './mailbox.js';
 import { preloadTavernImage } from './image-gen.js';
-import { buildMemoryContext, updateMemoryFromAIResponse, extractMemoryFromMessage } from './memory.js';
+import { buildMemoryContext, updateMemoryFromAIResponse, extractMemoryFromMessage, recordConversationTurn } from './memory.js';
 import { ensureLiyuanData, afterTurnBookkeeping, buildLiyuanContext, createDirectorCard, shouldSuggestDirectorCard, getOpenDirectorCards } from './world-state.js';
 
 let forceSyncBusy = false;
@@ -223,6 +223,11 @@ function mergePanelUpdates(panelPatch, options = {}) {
     return changed;
 }
 
+function normalizeTimeLike(value) {
+    const parsed = parseWorldTime(value, { source: 'json' }) || parseWorldTime(value, { source: 'manual' });
+    return parsed || null;
+}
+
 function buildForceSyncTranscript() {
     const lines = (gameConfig.history || []).map((m, index) => {
         const time = m.worldTime ? formatWorldTime(m.worldTime) : '时间未知';
@@ -339,7 +344,7 @@ export async function sendToAI(mailData = null) {
         const memoryBlock = memoryStr ? `\n\n${memoryStr}` : '';
 
         if (isDify) {
-            const query = `【法则】世界观:${gameConfig.worldSetting} 背景:${gameConfig.storyBackground} 主角:${gameConfig.charName}(${gameConfig.charInfo}) 守则:${gameConfig.systemPromptText}${loreStr}${memoryBlock}\n${isMail?'[信箱模式]仅回信，用new_mails返回。':'【面板】:'+JSON.stringify(gameConfig.panels)+'\n【行动】:'+userText+'\n【输出】末尾必须包含======DATA====== 后接纯JSON(含pass_time,panels,memory_db,new_mails等)。'}`;
+            const query = `【法则】世界观:${gameConfig.worldSetting} 背景:${gameConfig.storyBackground} 主角:${gameConfig.charName}(${gameConfig.charInfo}) 守则:${gameConfig.systemPromptText}${loreStr}${memoryBlock}\n${isMail?'[信箱模式]仅回信，用new_mails返回。':'【面板】:'+JSON.stringify(gameConfig.panels)+'\n【行动】:'+userText+'\n【输出】末尾必须包含======DATA====== 后接纯JSON(含current_time,pass_time,panels,memory_db,new_mails等)，其中 current_time 必须是本轮回复结束后的世界时间。'}`;
             let difyBody = {
                 inputs: {},
                 query: query,
@@ -364,7 +369,7 @@ export async function sendToAI(mailData = null) {
         } else {
             // ===== 标准 OpenAI 格式 =====
             const base = `【核心指令】硬核DM。回复末尾必须包含======DATA====== 后接纯JSON。\n世界观:${gameConfig.worldSetting}\n背景:${gameConfig.storyBackground}\n主角:${gameConfig.charName}(${gameConfig.charInfo})\n守则:${gameConfig.systemPromptText}${loreStr}${memoryBlock}`;
-            const format = `【最高指令】1.更新面板状态 2.末尾======DATA====== 后接纯JSON 3.时空平滑，叙事中出现明确时间变化时必须在JSON写pass_time(分钟)或world_time:{day,hour,minute}，不要让正文时间与JSON时间矛盾 4.支持new_mails,new_gallery,cg_cutin,pass_time,world_time,ambient,memory_db 5.若用户请求方向或场景存在重大分歧，可输出 director_card:{title,body,options,freeform}\n【当前时间】:${formatWorldTime(gameConfig.worldTime)}\n【当前面板】:${JSON.stringify(gameConfig.panels)}\n【融合世界状态】:${liyuanContext}`;
+            const format = `【最高指令】1.更新面板状态 2.末尾======DATA====== 后接纯JSON 3.每次回复都必须输出 current_time:{day,hour,minute}，如果发生时间推进可同时写 pass_time(分钟)，不要让正文时间与JSON时间矛盾 4.支持new_mails,new_gallery,cg_cutin,pass_time,current_time,ambient,memory_db 5.若用户请求方向或场景存在重大分歧，可输出 director_card:{title,body,options,freeform}\n【当前时间】:${formatWorldTime(gameConfig.worldTime)}\n【当前面板】:${JSON.stringify(gameConfig.panels)}\n【融合世界状态】:${liyuanContext}`;
 
             let msgs = [{ role: "system", content: base }];
 
@@ -438,6 +443,16 @@ export async function sendToAI(mailData = null) {
                 updateAmbientEnvironment(gameConfig.ambient);
             }
 
+            if (parsed.current_time || parsed.currentTime || parsed.world_time || parsed.worldTime) {
+                const nextTime = parsed.current_time || parsed.currentTime || parsed.world_time || parsed.worldTime;
+                const normalizedTime = normalizeTimeLike(nextTime);
+                if (normalizedTime) {
+                    gameConfig.worldTime = normalizedTime;
+                    document.getElementById('timePassText').innerText = `当前时间：${formatWorldTime(normalizedTime)}`;
+                    window.updateWorldTimeUI?.();
+                }
+            }
+
             // 新邮件
             if (parsed.new_mails) {
                 parsed.new_mails.forEach(m => {
@@ -486,6 +501,7 @@ export async function sendToAI(mailData = null) {
 
             // ===== 更新记忆数据库 =====
             updateMemoryFromAIResponse(parsed);
+            recordConversationTurn(userText, raw, parsed, { before: turnTime.before, after: parsed.current_time || parsed.currentTime || parsed.world_time || parsed.worldTime || turnTime.after });
             // 从AI回复中提取记忆
             extractMemoryFromMessage('', raw);
         } else if (answer.includes("======DATA======")) {

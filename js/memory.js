@@ -191,6 +191,53 @@ export function updateMemoryFromAIResponse(parsed) {
     saveLocalData();
 }
 
+function compactText(text, maxLen = 120) {
+    const value = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!value) return '';
+    return value.length > maxLen ? value.slice(0, maxLen - 1) + '…' : value;
+}
+
+export function recordConversationTurn(userText = '', aiText = '', parsed = null, turnTime = null) {
+    if (!gameConfig) return null;
+    const db = getMemoryDb();
+    if (!db) return null;
+
+    const wt = turnTime?.after || turnTime || gameConfig.worldTime || {};
+    const day = wt.day || 1;
+    const hour = Number.isFinite(wt.hour) ? wt.hour : 0;
+    const minute = Number.isFinite(wt.minute) ? wt.minute : 0;
+    const timestamp = `${day}-${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+    const userSummary = compactText(userText, 90);
+    const aiSummary = compactText(
+        parsed?.summary || parsed?.narrative || aiText || parsed?.content || '',
+        140
+    );
+
+    const title = userSummary ? `回合: ${userSummary}` : `回合: ${timestamp}`;
+    const descriptionParts = [];
+    if (userSummary) descriptionParts.push(`用户: ${userSummary}`);
+    if (aiSummary) descriptionParts.push(`AI: ${aiSummary}`);
+    const description = descriptionParts.join('\n');
+
+    const turnKey = `turn:${timestamp}:${userSummary.slice(0, 20)}:${aiSummary.slice(0, 20)}`;
+    if (!db.events.some(e => e.type === 'conversation_turn' && e.turnKey === turnKey)) {
+        db.events.push({
+            type: 'conversation_turn',
+            turnKey,
+            title,
+            description,
+            day,
+            time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+            importance: '中'
+        });
+        if (db.events.length > 100) db.events = db.events.slice(-100);
+        db.lastUpdated = Date.now();
+        return db.events[db.events.length - 1];
+    }
+    return null;
+}
+
 // ===== 自动从对话提取关键信息 =====
 export function extractMemoryFromMessage(userText, aiResponse) {
     if (!gameConfig) return;
@@ -331,3 +378,4 @@ window.openMemoryModal = openMemoryModal;
 window.buildMemoryContext = buildMemoryContext;
 window.__updateMemoryFromAI = updateMemoryFromAIResponse;
 window.__extractMemoryFromMessage = extractMemoryFromMessage;
+window.__recordConversationTurn = recordConversationTurn;
